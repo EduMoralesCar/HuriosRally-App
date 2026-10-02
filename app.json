@@ -1,0 +1,42 @@
+{
+  "expo": {
+    "name": "Hurios Rally",
+    "slug": "hurios-rally-app",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/icon.png",
+        "backgroundColor": "#0F172A"
+      },
+      "permissions": [
+        "CAMERA",
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE"
+      ]
+    },
+    "web": {
+      "favicon": "./assets/icon.png"
+    },
+    "plugins": [
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Permite a Hurios Rally App acceder a la cámara para tomar fotografías del estado de repuestos en almacén."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Permite a Hurios Rally App acceder a la galería para verificar imágenes de repuestos."
+        }
+      ],
+      "expo-font"
+    ]
+  }
+}
