@@ -31,7 +31,7 @@ export const AuthService = {
   async loginWithBiometrics(): Promise<{ success: boolean; user?: Usuario; message?: string }> {
     const sesionPrevia = await StorageService.getSesion();
     const usuarios = await StorageService.getUsuarios();
-    
+
     // Buscar si el usuario en sesión o algún usuario tiene biometría registrada
     const userToAuth = sesionPrevia?.biometricsEnabled ? sesionPrevia : usuarios.find((u) => u.biometricsEnabled);
 
@@ -109,6 +109,7 @@ export const AuthService = {
     // IP de red local para que el celular o emulador pueda comunicarse con el servidor Node.js
     const SERVER_URLS = [
       'http://192.168.1.108:3000',
+      'http://192.168.1.109:3000',
       'http://10.0.2.2:3000',
       'http://localhost:3000',
     ];
@@ -169,6 +170,7 @@ export const AuthService = {
     // 1. Probar verificación por servidor
     const SERVER_URLS = [
       'http://192.168.1.108:3000',
+      'http://192.168.1.109:3000',
       'http://10.0.2.2:3000',
       'http://localhost:3000',
     ];
