@@ -235,11 +235,11 @@ export const ProfileScreen: React.FC<Props> = ({ onLogout }) => {
         <View style={styles.avatarCard}>
           <View style={styles.avatarWrapper}>
             <Image
-              source={{
-                uri:
-                  user?.fotoPerfilUri ||
-                  'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&q=80',
-              }}
+              source={
+                user?.fotoPerfilUri && user.fotoPerfilUri.trim() !== ''
+                  ? { uri: user.fotoPerfilUri }
+                  : require('../../assets/default-avatar.png')
+              }
               style={styles.avatarImage}
             />
           </View>
@@ -548,7 +548,7 @@ export const ProfileScreen: React.FC<Props> = ({ onLogout }) => {
               secureTextEntry
             />
 
-            <Text style={styles.modalFieldLabel}>Nueva Contraseña (mín. 6 caracteres) *</Text>
+            <Text style={styles.modalFieldLabel}>Nueva Contraseña (mín. 8 caracteres con mayúscula, número y símbolo) *</Text>
             <TextInput
               style={styles.modalInput}
               placeholder="Nueva contraseña"
