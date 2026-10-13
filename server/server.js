@@ -45,25 +45,27 @@ app.post('/api/auth/send-reset-code', async (req, res) => {
   }
 
   const cleanEmail = email.trim().toLowerCase();
-  const existing = verificationCodes.get(cleanEmail);
-
-  // Si ya se generó un código hace menos de 60 segundos, reutilizamos el mismo código
-  let code;
-  const expireMinutes = parseInt(process.env.RESET_CODE_EXPIRE_MINUTES || '10', 10);
-  let expiresAt;
-
-  if (existing && existing.expiresAt > Date.now() && (existing.expiresAt - Date.now() > (expireMinutes * 60 - 60) * 1000)) {
-    code = existing.code;
-    expiresAt = existing.expiresAt;
-  } else {
-    code = Math.floor(100000 + Math.random() * 900000).toString();
-    expiresAt = Date.now() + expireMinutes * 60 * 1000;
-    verificationCodes.set(cleanEmail, {
-      code,
-      expiresAt,
-      username: username || 'Asesor Hurios Rally',
+  // Si ya se envió un código hace menos de 45 segundos para este correo, no volvemos a disparar el envío por SMTP
+  if (existing && existing.lastSentAt && (Date.now() - existing.lastSentAt < 45000)) {
+    console.log(`[SMTP Debounce] Petición duplicada ignorada para ${cleanEmail}. Código activo: ${existing.code}`);
+    return res.json({
+      success: true,
+      message: `Código ya enviado a ${cleanEmail}`,
+      code: existing.code,
+      expiresInMinutes: expireMinutes,
     });
   }
+
+  // Generar o renovar código
+  let code = existing && existing.expiresAt > Date.now() ? existing.code : Math.floor(100000 + Math.random() * 900000).toString();
+  const expiresAt = Date.now() + expireMinutes * 60 * 1000;
+
+  verificationCodes.set(cleanEmail, {
+    code,
+    expiresAt,
+    username: username || 'Asesor Hurios Rally',
+    lastSentAt: Date.now(),
+  });
 
   const destino = process.env.DEVELOPMENT_EMAIL_OVERRIDE || cleanEmail;
 
