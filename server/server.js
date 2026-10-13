@@ -45,16 +45,25 @@ app.post('/api/auth/send-reset-code', async (req, res) => {
   }
 
   const cleanEmail = email.trim().toLowerCase();
-  // Generar código aleatorio de 6 dígitos numéricos
-  const code = Math.floor(100000 + Math.random() * 900000).toString();
-  const expireMinutes = parseInt(process.env.RESET_CODE_EXPIRE_MINUTES || '10', 10);
-  const expiresAt = Date.now() + expireMinutes * 60 * 1000;
+  const existing = verificationCodes.get(cleanEmail);
 
-  verificationCodes.set(cleanEmail, {
-    code,
-    expiresAt,
-    username: username || 'Asesor Hurios Rally',
-  });
+  // Si ya se generó un código hace menos de 60 segundos, reutilizamos el mismo código
+  let code;
+  const expireMinutes = parseInt(process.env.RESET_CODE_EXPIRE_MINUTES || '10', 10);
+  let expiresAt;
+
+  if (existing && existing.expiresAt > Date.now() && (existing.expiresAt - Date.now() > (expireMinutes * 60 - 60) * 1000)) {
+    code = existing.code;
+    expiresAt = existing.expiresAt;
+  } else {
+    code = Math.floor(100000 + Math.random() * 900000).toString();
+    expiresAt = Date.now() + expireMinutes * 60 * 1000;
+    verificationCodes.set(cleanEmail, {
+      code,
+      expiresAt,
+      username: username || 'Asesor Hurios Rally',
+    });
+  }
 
   const destino = process.env.DEVELOPMENT_EMAIL_OVERRIDE || cleanEmail;
 
