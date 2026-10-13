@@ -23,7 +23,7 @@ interface Props {
 
 export const LoginScreen: React.FC<Props> = ({ onLoginSuccess }) => {
   const [username, setUsername] = useState('carlos_mendoza');
-  const [password, setPassword] = useState('123456');
+  const [password, setPassword] = useState('Hurios@2026');
   const [showPassword, setShowPassword] = useState(false);
   const [rememberSession, setRememberSession] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
@@ -528,7 +528,7 @@ export const LoginScreen: React.FC<Props> = ({ onLoginSuccess }) => {
               ]}
               onPress={() => {
                 setUsername('carlos_mendoza');
-                setPassword('123456');
+                setPassword('Hurios@2026');
               }}
               activeOpacity={0.8}
             >
@@ -555,7 +555,7 @@ export const LoginScreen: React.FC<Props> = ({ onLoginSuccess }) => {
               ]}
               onPress={() => {
                 setUsername('edu_morales');
-                setPassword('123456');
+                setPassword('Hurios@2026');
               }}
               activeOpacity={0.8}
             >
@@ -582,7 +582,7 @@ export const LoginScreen: React.FC<Props> = ({ onLoginSuccess }) => {
               ]}
               onPress={() => {
                 setUsername('raul_quispe');
-                setPassword('123456');
+                setPassword('Hurios@2026');
               }}
               activeOpacity={0.8}
             >
@@ -751,7 +751,7 @@ export const LoginScreen: React.FC<Props> = ({ onLoginSuccess }) => {
                 </View>
               </View>
 
-              <Text style={styles.fieldLabel}>Contraseña (mín. 6 caracteres) *</Text>
+              <Text style={styles.fieldLabel}>Contraseña (mín. 8 caracteres con mayúscula, número y símbolo) *</Text>
               <TextInput
                 style={styles.modalInput}
                 placeholder="••••••••"
@@ -901,7 +901,7 @@ export const LoginScreen: React.FC<Props> = ({ onLoginSuccess }) => {
                     Crea una nueva contraseña segura para tu cuenta de Hurios Rally.
                   </Text>
 
-                  <Text style={styles.fieldLabel}>Nueva Contraseña (mín. 6 caracteres) *</Text>
+                  <Text style={styles.fieldLabel}>Nueva Contraseña (mín. 8 caracteres con mayúscula, número y símbolo) *</Text>
                   <TextInput
                     style={styles.modalInput}
                     placeholder="••••••••"
@@ -972,7 +972,7 @@ export const LoginScreen: React.FC<Props> = ({ onLoginSuccess }) => {
               secureTextEntry
             />
 
-            <Text style={styles.fieldLabel}>Nueva Contraseña (mín. 6 caracteres) *</Text>
+            <Text style={styles.fieldLabel}>Nueva Contraseña (mín. 8 caracteres con mayúscula, número y símbolo) *</Text>
             <TextInput
               style={styles.modalInput}
               placeholder="••••••••"

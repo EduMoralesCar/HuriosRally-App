@@ -5,12 +5,14 @@ import { DetailScreen } from '../screens/DetailScreen';
 import { BottomTabNavigator } from './BottomTabNavigator';
 import { RootStackParamList } from './types';
 import { StorageService } from '../services/StorageService';
+import { useCart } from '../context/CartContext';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
 export const AppNavigator: React.FC = () => {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [sessionUser, setSessionUser] = useState<any>(null);
+  const { refreshCart, clearCart } = useCart();
 
   useEffect(() => {
     checkSession();
@@ -21,6 +23,7 @@ export const AppNavigator: React.FC = () => {
     if (user && user.isAuthenticated) {
       setSessionUser(user);
       setIsAuthenticated(true);
+      await refreshCart();
     }
   };
 
@@ -28,12 +31,14 @@ export const AppNavigator: React.FC = () => {
     const user = await StorageService.getSesion();
     setSessionUser(user);
     setIsAuthenticated(true);
+    await refreshCart();
   };
 
   const handleLogout = async () => {
     await StorageService.clearSesion();
     setSessionUser(null);
     setIsAuthenticated(false);
+    await clearCart();
   };
 
   return (

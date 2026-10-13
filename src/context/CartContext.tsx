@@ -82,18 +82,15 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       let preorden = await StorageService.getPreOrden();
 
-      if (!preorden || !preorden.items || preorden.items.length === 0) {
-        // Inicializar con los primeros 3 productos de REPUESTOS_MOCK (con sus URLs y datos actualizados)
-        const iniciales: PedidoItem[] = [
-          { repuesto: REPUESTOS_MOCK[0], cantidad: 2 }, // Pastillas de freno
-          { repuesto: REPUESTOS_MOCK[10], cantidad: 1 }, // Filtro de aceite
-          { repuesto: REPUESTOS_MOCK[1], cantidad: 1 }, // Disco de freno o amortiguador
-        ];
-        await guardarYActualizar(iniciales);
+      if (!preorden || !preorden.items) {
+        // Carrito vacío para usuarios nuevos
+        setItems([]);
+        calcularFinanzas([]);
       } else {
-        // Sincronizar los ítems guardados con las URLs y datos frescos de repuestos.mock.ts
+        // Sincronizar los ítems guardados por el usuario con las URLs y datos frescos de repuestos.mock.ts
         const itemsSincronizados = sincronizarConCatalogo(preorden.items);
-        await guardarYActualizar(itemsSincronizados);
+        setItems(itemsSincronizados);
+        calcularFinanzas(itemsSincronizados);
       }
     } catch (e) {
       console.error('Error cargando preorden:', e);
