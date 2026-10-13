@@ -45,6 +45,9 @@ app.post('/api/auth/send-reset-code', async (req, res) => {
   }
 
   const cleanEmail = email.trim().toLowerCase();
+  const existing = verificationCodes.get(cleanEmail);
+  const expireMinutes = parseInt(process.env.RESET_CODE_EXPIRE_MINUTES || '10', 10);
+
   // Si ya se envió un código hace menos de 45 segundos para este correo, no volvemos a disparar el envío por SMTP
   if (existing && existing.lastSentAt && (Date.now() - existing.lastSentAt < 45000)) {
     console.log(`[SMTP Debounce] Petición duplicada ignorada para ${cleanEmail}. Código activo: ${existing.code}`);
