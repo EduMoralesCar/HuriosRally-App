@@ -21,7 +21,7 @@ const USUARIOS_SEMILLA: Usuario[] = [
     rol: 'Cliente',
     telefono: '+51 987 111 222',
     sede: 'Lima Norte / SMP (Sede Central)',
-    password: '123456',
+    password: 'Hurios@2026',
     fotoPerfilUri: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400&q=80',
     isAuthenticated: false,
   },
@@ -33,7 +33,7 @@ const USUARIOS_SEMILLA: Usuario[] = [
     rol: 'Asesor',
     telefono: '+51 987 654 321',
     sede: 'Lima Norte / SMP (Sede Central)',
-    password: '123456',
+    password: 'Hurios@2026',
     fotoPerfilUri: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&q=80',
     isAuthenticated: false,
   },
@@ -45,7 +45,7 @@ const USUARIOS_SEMILLA: Usuario[] = [
     rol: 'Almacenero',
     telefono: '+51 987 333 444',
     sede: 'Almacén Central / Despacho SMP',
-    password: '123456',
+    password: 'Hurios@2026',
     fotoPerfilUri: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=400&q=80',
     isAuthenticated: false,
   },
@@ -159,22 +159,30 @@ export const StorageService = {
     await this.saveItem(KEYS.USERS_DB, usuarios);
   },
 
-  // ---------------- FAVORITOS Y PRE-ORDEN ----------------
+  // ---------------- FAVORITOS Y PRE-ORDEN (AISLADOS POR USUARIO) ----------------
   async getFavoritos(): Promise<Repuesto[]> {
-    const list = await this.getItem<Repuesto[]>(KEYS.FAVORITOS);
+    const sesion = await this.getSesion();
+    const key = sesion ? `${KEYS.FAVORITOS}_${sesion.id}` : KEYS.FAVORITOS;
+    const list = await this.getItem<Repuesto[]>(key);
     return list || [];
   },
 
   async saveFavoritos(favoritos: Repuesto[]): Promise<void> {
-    await this.saveItem(KEYS.FAVORITOS, favoritos);
+    const sesion = await this.getSesion();
+    const key = sesion ? `${KEYS.FAVORITOS}_${sesion.id}` : KEYS.FAVORITOS;
+    await this.saveItem(key, favoritos);
   },
 
   async getPreOrden(): Promise<PedidoLocal | null> {
-    return await this.getItem<PedidoLocal>(KEYS.PREORDEN);
+    const sesion = await this.getSesion();
+    const key = sesion ? `${KEYS.PREORDEN}_${sesion.id}` : KEYS.PREORDEN;
+    return await this.getItem<PedidoLocal>(key);
   },
 
   async savePreOrden(pedido: PedidoLocal): Promise<void> {
-    await this.saveItem(KEYS.PREORDEN, pedido);
+    const sesion = await this.getSesion();
+    const key = sesion ? `${KEYS.PREORDEN}_${sesion.id}` : KEYS.PREORDEN;
+    await this.saveItem(key, pedido);
   },
 
   async getHistorialPedidos(): Promise<PedidoLocal[]> {

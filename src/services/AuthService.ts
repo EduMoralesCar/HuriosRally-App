@@ -1,6 +1,33 @@
 import { StorageService } from './StorageService';
 import { Usuario } from '../types';
 
+/**
+ * Validador estricto de contraseñas de seguridad profesional:
+ * - Mínimo 8 caracteres
+ * - Al menos 1 mayúscula
+ * - Al menos 1 minúscula
+ * - Al menos 1 número
+ * - Al menos 1 carácter especial
+ */
+export const validateStrongPassword = (password: string): { valid: boolean; message?: string } => {
+  if (!password || password.length < 8) {
+    return { valid: false, message: 'La contraseña debe tener como mínimo 8 caracteres.' };
+  }
+  if (!/[A-Z]/.test(password)) {
+    return { valid: false, message: 'La contraseña debe contener al menos una letra mayúscula (A-Z).' };
+  }
+  if (!/[a-z]/.test(password)) {
+    return { valid: false, message: 'La contraseña debe contener al menos una letra minúscula (a-z).' };
+  }
+  if (!/[0-9]/.test(password)) {
+    return { valid: false, message: 'La contraseña debe contener al menos un número (0-9).' };
+  }
+  if (!/[!@#$%^&*(),.?":{}|<>_\-]/.test(password)) {
+    return { valid: false, message: 'La contraseña debe contener al menos un carácter especial (@, $, #, _, -, etc.).' };
+  }
+  return { valid: true };
+};
+
 export const AuthService = {
   // 1. Iniciar sesión con validación de credenciales
   async login(usernameOrEmail: string, password: string): Promise<{ success: boolean; user?: Usuario; message?: string }> {
@@ -67,6 +94,12 @@ export const AuthService = {
       return { success: false, message: 'El nombre de usuario o correo ya se encuentra registrado.' };
     }
 
+    // Validar contraseña segura
+    const passCheck = validateStrongPassword(data.password);
+    if (!passCheck.valid) {
+      return { success: false, message: passCheck.message };
+    }
+
     const nuevoUsuario: Usuario = {
       id: `usr_${Date.now()}`,
       username: data.username.trim(),
@@ -76,7 +109,7 @@ export const AuthService = {
       telefono: data.telefono || '+51 900 000 000',
       sede: data.sede || 'Lima Norte / SMP (Sede Central)',
       password: data.password,
-      fotoPerfilUri: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=400&q=80',
+      fotoPerfilUri: '',
       isAuthenticated: false,
     };
 
@@ -215,8 +248,9 @@ export const AuthService = {
 
   // 4c. Establecer nueva contraseña tras verificar el código
   async resetPasswordWithVerifiedCode(email: string, newPass: string): Promise<{ success: boolean; message: string }> {
-    if (newPass.length < 6) {
-      return { success: false, message: 'La nueva contraseña debe tener al menos 6 caracteres.' };
+    const passCheck = validateStrongPassword(newPass);
+    if (!passCheck.valid) {
+      return { success: false, message: passCheck.message || 'Contraseña no válida.' };
     }
 
     const usuarios = await StorageService.getUsuarios();
@@ -250,8 +284,9 @@ export const AuthService = {
       return { success: false, message: 'La contraseña actual no coincide.' };
     }
 
-    if (newPass.length < 6) {
-      return { success: false, message: 'La nueva contraseña debe tener al menos 6 caracteres.' };
+    const passCheck = validateStrongPassword(newPass);
+    if (!passCheck.valid) {
+      return { success: false, message: passCheck.message || 'Contraseña no válida.' };
     }
 
     usuario.password = newPass;

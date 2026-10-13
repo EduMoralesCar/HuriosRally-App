@@ -223,7 +223,11 @@ export const CatalogScreen: React.FC<Props> = ({ navigation, onLogout }) => {
 
             <ScrollView contentContainerStyle={styles.drawerBody}>
               <Text style={styles.drawerSectionTitle}>
-                {currentUser?.rol === 'Asesor' ? 'OPERACIONES DE MOSTRADOR' : 'SERVICIOS DE ALMACÉN'}
+                {currentUser?.rol === 'Asesor'
+                  ? 'OPERACIONES DE MOSTRADOR'
+                  : currentUser?.rol === 'Almacenero'
+                  ? 'SERVICIOS DE ALMACÉN'
+                  : 'SERVICIOS AL CLIENTE'}
               </Text>
 
               <TouchableOpacity
@@ -298,7 +302,13 @@ export const CatalogScreen: React.FC<Props> = ({ navigation, onLogout }) => {
                 }}
               >
                 <Ionicons name="person-circle-outline" size={20} color="#64748B" />
-                <Text style={styles.drawerItemText}>Mi Perfil de Asesor</Text>
+                <Text style={styles.drawerItemText}>
+                  {currentUser?.rol === 'Asesor'
+                    ? 'Mi Perfil de Asesor'
+                    : currentUser?.rol === 'Almacenero'
+                    ? 'Mi Perfil de Almacenero'
+                    : 'Mi Perfil de Cliente'}
+                </Text>
               </TouchableOpacity>
 
               <Text style={styles.drawerSectionTitle}>SESIÓN DE USUARIO</Text>
