@@ -52,15 +52,21 @@
 
 ---
 
-## 👥 Cuentas y Credenciales de Prueba
+## 👥 Cuentas Maestras y Credenciales de Prueba
 
-Para facilitar las pruebas de evaluación, el sistema incluye 3 cuentas maestras con acceso directo desde los botones del login:
+Para facilitar las pruebas de evaluación del proyecto, el sistema incluye **3 cuentas maestras predeterminadas** con acceso directo desde los botones demo del Login. Estas cuentas se inicializan automáticamente al clonar y ejecutar el repositorio:
 
-| Rol | Usuario | Contraseña | Nombre Completo | Sede Asignada |
-| :--- | :--- | :---: | :--- | :--- |
-| **1. Cliente** | `carlos_mendoza` | `123456` | Carlos Mendoza Silva | Lima Norte / SMP (Sede Central) |
-| **2. Asesor de Ventas** | `edu_morales` | `123456` | Edu Morales Carlos | Lima Norte / SMP (Sede Central) |
-| **3. Almacenero** | `raul_quispe` | `123456` | Raúl Quispe Huamán | Almacén Central / Despacho SMP |
+| Rol | Usuario (`username`) | Correo Corporativo (`email`) | Contraseña Segura | Sede Asignada |
+| :--- | :--- | :--- | :---: | :--- |
+| 👤 **1. Cliente** | `carlos_mendoza` | `carlos_mendoza.cliente@huriosrally.com` | `Hurios@2026` | Lima Norte / SMP (Sede Central) |
+| 💼 **2. Asesor de Ventas** | `edu_morales` | `edu_morales.ventas@huriosrally.com` | `Hurios@2026` | Lima Norte / SMP (Sede Central) |
+| 📦 **3. Almacenero** | `raul_quispe` | `raul_quispe.almacen@huriosrally.com` | `Hurios@2026` | Almacén Central / Despacho SMP |
+
+> 🔒 **Política de Seguridad Implementada (Regex):**
+> Todas las contraseñas exigen como mínimo **8 caracteres**, al menos 1 letra mayúscula, 1 minúscula, 1 número y 1 carácter especial (por ejemplo: `@`, `$`, `#`).
+>
+> 💾 **Nota de Persistencia y Aislamiento:**
+> Los usuarios creados durante la ejecución se guardan de forma local en el dispositivo del evaluador a través de `AsyncStorage`. Cada usuario cuenta con su propio carrito y favoritos aislados. Para un banco de datos completo de usuarios de prueba para nuevos evaluadores, consultar [docs/pruebas_usuarios.md](docs/pruebas_usuarios.md).
 
 ---
 
