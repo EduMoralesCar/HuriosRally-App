@@ -16,7 +16,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Usuario } from '../types';
 import { StorageService } from '../services/StorageService';
 import { CameraService } from '../services/CameraService';
-import { AuthService } from '../services/AuthService';
+import { AuthService, validateStrongPassword } from '../services/AuthService';
 
 interface Props {
   onLogout: () => void;
@@ -126,8 +126,9 @@ export const ProfileScreen: React.FC<Props> = ({ onLogout }) => {
       return;
     }
 
-    if (newPass.length < 6) {
-      triggerFeedback('error', 'Contraseña Débil', 'La nueva contraseña debe tener como mínimo 6 caracteres.');
+    const passVal = validateStrongPassword(newPass);
+    if (!passVal.valid) {
+      triggerFeedback('error', 'Contraseña Débil', passVal.message || 'La nueva contraseña debe tener como mínimo 8 caracteres.');
       return;
     }
 

@@ -141,10 +141,9 @@ export const AuthService = {
 
     // IP de red local para que el celular o emulador pueda comunicarse con el servidor Node.js
     const SERVER_URLS = [
-      'http://192.168.1.108:3000',
       'http://192.168.1.109:3000',
-      'http://10.0.2.2:3000',
       'http://localhost:3000',
+      'http://10.0.2.2:3000',
     ];
 
     let emailSent = false;
@@ -202,10 +201,9 @@ export const AuthService = {
 
     // 1. Probar verificación por servidor
     const SERVER_URLS = [
-      'http://192.168.1.108:3000',
       'http://192.168.1.109:3000',
-      'http://10.0.2.2:3000',
       'http://localhost:3000',
+      'http://10.0.2.2:3000',
     ];
 
     for (const baseUrl of SERVER_URLS) {
