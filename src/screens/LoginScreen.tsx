@@ -14,7 +14,7 @@ import {
   ScrollView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { AuthService } from '../services/AuthService';
+import { AuthService, validateStrongPassword } from '../services/AuthService';
 import { StorageService } from '../services/StorageService';
 
 interface Props {
@@ -199,8 +199,9 @@ export const LoginScreen: React.FC<Props> = ({ onLoginSuccess }) => {
       return;
     }
 
-    if (regPass.length < 6) {
-      mostrarMensaje('Seguridad', 'La contraseña debe tener al menos 6 caracteres.', 'warning');
+    const passVal = validateStrongPassword(regPass);
+    if (!passVal.valid) {
+      mostrarMensaje('Contraseña Débil', passVal.message || 'La contraseña debe tener al menos 8 caracteres.', 'warning');
       return;
     }
 
@@ -300,8 +301,9 @@ export const LoginScreen: React.FC<Props> = ({ onLoginSuccess }) => {
       return;
     }
 
-    if (newResetPassword.length < 6) {
-      mostrarMensaje('Seguridad', 'La contraseña debe contener al menos 6 caracteres.', 'warning');
+    const passVal = validateStrongPassword(newResetPassword);
+    if (!passVal.valid) {
+      mostrarMensaje('Contraseña Débil', passVal.message || 'La contraseña debe contener al menos 8 caracteres.', 'warning');
       return;
     }
 
