@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { memo } from 'react';
 import { View, ScrollView, TouchableOpacity, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { CategoriaRepuesto } from '../types';
@@ -14,6 +14,7 @@ const CATEGORIAS: CategoriaItem[] = [
   { nombre: 'Suspensión', icono: 'git-commit-outline' },
   { nombre: 'Filtros', icono: 'layers-outline' },
   { nombre: 'Motor', icono: 'hardware-chip-outline' },
+  { nombre: 'Accesorios', icono: 'construct-outline' },
 ];
 
 interface Props {
@@ -22,7 +23,7 @@ interface Props {
   count?: number;
 }
 
-export const CategoryPills: React.FC<Props> = ({ selected, onSelect, count }) => {
+const CategoryPillsComponent: React.FC<Props> = ({ selected, onSelect, count }) => {
   return (
     <View style={styles.outerWrapper}>
       <ScrollView
@@ -56,13 +57,15 @@ export const CategoryPills: React.FC<Props> = ({ selected, onSelect, count }) =>
       {count !== undefined && (
         <View style={styles.badgeWrapper}>
           <Text style={styles.badgeText}>
-            <Text style={{ fontWeight: '800', color: '#0F172A' }}>{count}</Text> resp.
+            <Text style={{ fontWeight: '800', color: '#0F172A' }}>{count}</Text> rep.
           </Text>
         </View>
       )}
     </View>
   );
 };
+
+export const CategoryPills = memo(CategoryPillsComponent);
 
 const styles = StyleSheet.create({
   outerWrapper: {
@@ -95,7 +98,7 @@ const styles = StyleSheet.create({
     height: 36,
   },
   pillActive: {
-    backgroundColor: '#EF4444', // Rojo activo del prototipo
+    backgroundColor: '#EF4444',
   },
   pillInactive: {
     backgroundColor: '#F1F5F9',

@@ -44,8 +44,13 @@ export interface PedidoLocal {
   igv: number;
   totalCotizado: number;
   estado?: 'Pendiente' | 'Confirmado' | 'Pagado' | 'Entregado';
+  clienteId?: string;
   clienteNombre?: string;
+  clienteTelefono?: string;
+  creadoPorId?: string;
+  creadoPorNombre?: string;
   metodoPago?: 'Yape / Plin' | 'Tarjeta Débito/Crédito' | 'Contraentrega SMP';
   comprobanteTipo?: 'Boleta Electrónica' | 'Factura Comercial';
   documentoNumero?: string;
+  numOperacion?: string;
 }
