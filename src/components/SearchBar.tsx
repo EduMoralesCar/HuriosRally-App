@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { memo } from 'react';
 import { View, TextInput, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -8,18 +8,20 @@ interface Props {
   onFilterPress?: () => void;
 }
 
-export const SearchBar: React.FC<Props> = ({ value, onChangeText, onFilterPress }) => {
+const SearchBarComponent: React.FC<Props> = ({ value, onChangeText, onFilterPress }) => {
   return (
     <View style={styles.container}>
       <View style={styles.inputWrapper}>
         <Ionicons name="search-outline" size={19} color="#64748B" style={styles.searchIcon} />
         <TextInput
           style={styles.input}
-          placeholder="Buscar repuestos, OEM o categoría..."
+          placeholder="Buscar repuestos, OEM, marca o categoría..."
           placeholderTextColor="#94A3B8"
           value={value}
           onChangeText={onChangeText}
           autoCapitalize="none"
+          autoCorrect={false}
+          returnKeyType="search"
         />
         {value.length > 0 && (
           <TouchableOpacity onPress={() => onChangeText('')} style={{ padding: 4 }}>
@@ -28,13 +30,17 @@ export const SearchBar: React.FC<Props> = ({ value, onChangeText, onFilterPress 
         )}
       </View>
 
-      {/* Botón de Filtros Laterales */}
-      <TouchableOpacity style={styles.filterButton} onPress={onFilterPress} activeOpacity={0.8}>
-        <Ionicons name="options-outline" size={20} color="#0F172A" />
-      </TouchableOpacity>
+      {/* Botón de Filtros / Familias */}
+      {onFilterPress && (
+        <TouchableOpacity style={styles.filterButton} onPress={onFilterPress} activeOpacity={0.8}>
+          <Ionicons name="options-outline" size={20} color="#0F172A" />
+        </TouchableOpacity>
+      )}
     </View>
   );
 };
+
+export const SearchBar = memo(SearchBarComponent);
 
 const styles = StyleSheet.create({
   container: {

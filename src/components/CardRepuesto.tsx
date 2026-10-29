@@ -1,26 +1,37 @@
-import React from 'react';
-import { View, Text, Image, StyleSheet, TouchableOpacity } from 'react-native';
+import React, { memo } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Repuesto } from '../types';
+import { ProductImage } from './ProductImage';
+import { getInfoStock, getMarca, formatearSoles } from '../utils/catalog';
 
 interface Props {
   repuesto: Repuesto;
   onPress: () => void;
   isFavorite?: boolean;
   onToggleFavorite?: () => void;
+  stock?: number;
+  onAddToCart?: () => void;
 }
 
-export const CardRepuesto: React.FC<Props> = ({
+const CardRepuestoComponent: React.FC<Props> = ({
   repuesto,
   onPress,
   isFavorite = false,
   onToggleFavorite,
+  stock,
+  onAddToCart,
 }) => {
+  const stockEfectivo = stock !== undefined ? stock : repuesto.stock;
+  const infoStock = getInfoStock(stockEfectivo);
+  const marca = getMarca(repuesto);
+  const agotado = infoStock.estado === 'agotado';
+
   return (
     <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.88}>
-      {/* Miniatura del Repuesto */}
+      {/* Miniatura del Repuesto con fallback y loader */}
       <View style={styles.imageWrapper}>
-        <Image source={{ uri: repuesto.imagenUri }} style={styles.image} resizeMode="contain" />
+        <ProductImage uri={repuesto.imagenUri} style={styles.image} resizeMode="contain" />
       </View>
 
       {/* Información Central y Precios */}
@@ -29,21 +40,25 @@ export const CardRepuesto: React.FC<Props> = ({
           <Text style={styles.nombre} numberOfLines={1}>
             {repuesto.nombre}
           </Text>
-          <TouchableOpacity
-            onPress={onToggleFavorite}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-            style={styles.heartButton}
-          >
-            <Ionicons
-              name={isFavorite ? 'heart' : 'heart-outline'}
-              size={20}
-              color={isFavorite ? '#EF4444' : '#64748B'}
-            />
-          </TouchableOpacity>
+          {onToggleFavorite && (
+            <TouchableOpacity
+              onPress={onToggleFavorite}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              style={styles.heartButton}
+            >
+              <Ionicons
+                name={isFavorite ? 'heart' : 'heart-outline'}
+                size={20}
+                color={isFavorite ? '#EF4444' : '#64748B'}
+              />
+            </TouchableOpacity>
+          )}
         </View>
 
         <Text style={styles.oem}>OEM: {repuesto.codigoOEM}</Text>
-        <Text style={styles.metaInfo}>Toyota | {repuesto.categoria}</Text>
+        <Text style={styles.metaInfo} numberOfLines={1}>
+          {marca} • {repuesto.categoria}
+        </Text>
 
         {/* Calificación con estrellas */}
         <View style={styles.ratingRow}>
@@ -57,19 +72,34 @@ export const CardRepuesto: React.FC<Props> = ({
           </Text>
         </View>
 
-        {/* Badge En Stock y Precio */}
+        {/* Badge de Stock Real, Precio y Botón rápido de carrito */}
         <View style={styles.bottomRow}>
-          <View style={styles.stockBadge}>
-            <Ionicons name="checkmark-circle" size={13} color="#10B981" />
-            <Text style={styles.stockText}>En stock</Text>
+          <View style={[styles.stockBadge, { backgroundColor: infoStock.fondo }]}>
+            <Ionicons name={infoStock.icono} size={13} color={infoStock.color} />
+            <Text style={[styles.stockText, { color: infoStock.color }]}>{infoStock.etiqueta}</Text>
           </View>
 
-          <Text style={styles.precio}>S/ {repuesto.precio.toFixed(2)}</Text>
+          <View style={styles.priceActionRow}>
+            <Text style={styles.precio}>{formatearSoles(repuesto.precio)}</Text>
+            {onAddToCart && (
+              <TouchableOpacity
+                style={[styles.quickCartBtn, agotado && styles.quickCartBtnDisabled]}
+                onPress={onAddToCart}
+                disabled={agotado}
+                hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                activeOpacity={0.8}
+              >
+                <Ionicons name={agotado ? 'ban-outline' : 'cart-outline'} size={15} color="#FFFFFF" />
+              </TouchableOpacity>
+            )}
+          </View>
         </View>
       </View>
     </TouchableOpacity>
   );
 };
+
+export const CardRepuesto = memo(CardRepuestoComponent);
 
 const styles = StyleSheet.create({
   card: {
@@ -88,8 +118,8 @@ const styles = StyleSheet.create({
     borderColor: '#F1F5F9',
   },
   imageWrapper: {
-    width: 90,
-    height: 90,
+    width: 92,
+    height: 92,
     backgroundColor: '#F8FAFC',
     borderRadius: 12,
     justifyContent: 'center',
@@ -148,26 +178,40 @@ const styles = StyleSheet.create({
   bottomRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-end',
+    alignItems: 'center',
     marginTop: 6,
   },
   stockBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#ECFDF5',
     paddingHorizontal: 8,
-    paddingVertical: 2,
+    paddingVertical: 3,
     borderRadius: 6,
     gap: 4,
   },
   stockText: {
     fontSize: 11,
-    color: '#059669',
-    fontWeight: '600',
+    fontWeight: '700',
+  },
+  priceActionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
   precio: {
     fontSize: 16,
     fontWeight: '800',
     color: '#0F172A',
+  },
+  quickCartBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    backgroundColor: '#1E3A8A',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  quickCartBtnDisabled: {
+    backgroundColor: '#CBD5E1',
   },
 });

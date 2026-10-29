@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 import { PedidoItem, PedidoLocal, Repuesto } from '../types';
 import { StorageService } from '../services/StorageService';
 import { REPUESTOS_MOCK } from '../data/repuestos.mock';
@@ -24,151 +24,179 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [igv, setIgv] = useState(0);
   const [total, setTotal] = useState(0);
 
-  useEffect(() => {
-    cargarPreordenInicial();
-  }, []);
+  // Sincronizar repuestos con la data más reciente de repuestos.mock.ts y stock de almacén
+  const sincronizarConCatalogo = useCallback(
+    (itemsGuardados: PedidoItem[], overrides: Record<string, number>): PedidoItem[] => {
+      return itemsGuardados.map((item) => {
+        const repuestoFresco = REPUESTOS_MOCK.find(
+          (r) => r.codigoOEM === item.repuesto.codigoOEM || r.id === item.repuesto.id
+        );
 
-  // Función para sincronizar repuestos con la data más reciente de repuestos.mock.ts
-  const sincronizarConCatalogo = (itemsGuardados: PedidoItem[]): PedidoItem[] => {
-    return itemsGuardados.map((item) => {
-      // Buscar el repuesto en REPUESTOS_MOCK por código OEM o por ID
-      const repuestoFresco = REPUESTOS_MOCK.find(
-        (r) => r.codigoOEM === item.repuesto.codigoOEM || r.id === item.repuesto.id
-      );
+        const base = repuestoFresco || item.repuesto;
+        const stockReal = overrides[base.id] !== undefined ? overrides[base.id] : base.stock;
 
-      if (repuestoFresco) {
         return {
           ...item,
           repuesto: {
-            ...repuestoFresco,
-            fotoInspeccionUri: item.repuesto.fotoInspeccionUri || repuestoFresco.fotoInspeccionUri,
+            ...base,
+            stock: stockReal,
+            fotoInspeccionUri: item.repuesto.fotoInspeccionUri || base.fotoInspeccionUri,
           },
         };
-      }
-      return item;
-    });
-  };
+      });
+    },
+    []
+  );
 
-  const calcularFinanzas = (itemsActuales: PedidoItem[]) => {
+  const calcularFinanzas = useCallback((itemsActuales: PedidoItem[]) => {
     const sub = itemsActuales.reduce((acc, curr) => acc + curr.repuesto.precio * curr.cantidad, 0);
     const tax = sub * 0.18;
     const tot = sub + tax;
     setSubtotal(sub);
     setIgv(tax);
     setTotal(tot);
-  };
+  }, []);
 
-  const guardarYActualizar = async (nuevosItems: PedidoItem[]) => {
-    setItems(nuevosItems);
-    calcularFinanzas(nuevosItems);
+  const guardarYActualizar = useCallback(
+    async (nuevosItems: PedidoItem[]) => {
+      setItems(nuevosItems);
+      calcularFinanzas(nuevosItems);
 
-    const sub = nuevosItems.reduce((acc, curr) => acc + curr.repuesto.precio * curr.cantidad, 0);
-    const tax = sub * 0.18;
-    const tot = sub + tax;
+      const sub = nuevosItems.reduce((acc, curr) => acc + curr.repuesto.precio * curr.cantidad, 0);
+      const tax = sub * 0.18;
+      const tot = sub + tax;
 
-    const preorden: PedidoLocal = {
-      items: nuevosItems,
-      fechaCreacion: new Date().toISOString(),
-      subtotal: sub,
-      igv: tax,
-      totalCotizado: tot,
-      estado: 'Pendiente',
-    };
+      const preorden: PedidoLocal = {
+        items: nuevosItems,
+        fechaCreacion: new Date().toISOString(),
+        subtotal: sub,
+        igv: tax,
+        totalCotizado: tot,
+        estado: 'Pendiente',
+      };
 
-    await StorageService.savePreOrden(preorden);
-  };
+      await StorageService.savePreOrden(preorden);
+    },
+    [calcularFinanzas]
+  );
 
-  const cargarPreordenInicial = async () => {
+  const cargarPreordenInicial = useCallback(async () => {
     try {
-      let preorden = await StorageService.getPreOrden();
+      const [preorden, overrides] = await Promise.all([
+        StorageService.getPreOrden(),
+        StorageService.getStockOverrides(),
+      ]);
 
       if (!preorden || !preorden.items) {
-        // Carrito vacío para usuarios nuevos
         setItems([]);
         calcularFinanzas([]);
       } else {
-        // Sincronizar los ítems guardados por el usuario con las URLs y datos frescos de repuestos.mock.ts
-        const itemsSincronizados = sincronizarConCatalogo(preorden.items);
+        const itemsSincronizados = sincronizarConCatalogo(preorden.items, overrides);
         setItems(itemsSincronizados);
         calcularFinanzas(itemsSincronizados);
       }
     } catch (e) {
       console.error('Error cargando preorden:', e);
     }
-  };
+  }, [calcularFinanzas, sincronizarConCatalogo]);
 
-  const addToCart = async (repuesto: Repuesto, cantidad = 1) => {
-    // Tomar siempre los datos más actualizados del repuesto
-    const repuestoFresco = REPUESTOS_MOCK.find(
-      (r) => r.codigoOEM === repuesto.codigoOEM || r.id === repuesto.id
-    ) || repuesto;
+  useEffect(() => {
+    cargarPreordenInicial();
+  }, [cargarPreordenInicial]);
 
-    const copia = [...items];
-    const index = copia.findIndex((i) => i.repuesto.codigoOEM === repuestoFresco.codigoOEM);
+  const addToCart = useCallback(
+    async (repuesto: Repuesto, cantidad = 1) => {
+      const overrides = await StorageService.getStockOverrides();
+      const repuestoBase =
+        REPUESTOS_MOCK.find((r) => r.codigoOEM === repuesto.codigoOEM || r.id === repuesto.id) || repuesto;
+      const stockDisponible =
+        overrides[repuestoBase.id] !== undefined ? overrides[repuestoBase.id] : repuestoBase.stock;
 
-    if (index >= 0) {
-      copia[index] = {
-        ...copia[index],
-        cantidad: copia[index].cantidad + cantidad,
-        repuesto: repuestoFresco,
+      if (stockDisponible <= 0) return;
+
+      const repuestoFresco: Repuesto = {
+        ...repuestoBase,
+        stock: stockDisponible,
+        fotoInspeccionUri: repuesto.fotoInspeccionUri || repuestoBase.fotoInspeccionUri,
       };
-    } else {
-      copia.push({
-        repuesto: repuestoFresco,
-        cantidad,
-      });
-    }
 
-    await guardarYActualizar(copia);
-  };
+      const copia = [...items];
+      const index = copia.findIndex((i) => i.repuesto.codigoOEM === repuestoFresco.codigoOEM);
 
-  const removeFromCart = async (repuestoId: string) => {
-    const copia = items.filter((i) => i.repuesto.id !== repuestoId && i.repuesto.codigoOEM !== repuestoId);
-    await guardarYActualizar(copia);
-  };
+      if (index >= 0) {
+        const nuevaCant = Math.min(stockDisponible, copia[index].cantidad + cantidad);
+        copia[index] = {
+          ...copia[index],
+          cantidad: nuevaCant,
+          repuesto: repuestoFresco,
+        };
+      } else {
+        copia.push({
+          repuesto: repuestoFresco,
+          cantidad: Math.min(stockDisponible, cantidad),
+        });
+      }
 
-  const updateQuantity = async (repuestoId: string, delta: number) => {
-    const copia = items
-      .map((i) => {
-        if (i.repuesto.id === repuestoId || i.repuesto.codigoOEM === repuestoId) {
-          const nuevaCantidad = i.cantidad + delta;
-          return nuevaCantidad > 0 ? { ...i, cantidad: nuevaCantidad } : null;
-        }
-        return i;
-      })
-      .filter(Boolean) as PedidoItem[];
-
-    await guardarYActualizar(copia);
-  };
-
-  const clearCart = async () => {
-    await guardarYActualizar([]);
-  };
-
-  const refreshCart = async () => {
-    await cargarPreordenInicial();
-  };
-
-  const totalCount = items.reduce((acc, curr) => acc + curr.cantidad, 0);
-
-  return (
-    <CartContext.Provider
-      value={{
-        items,
-        totalCount,
-        subtotal,
-        igv,
-        total,
-        addToCart,
-        removeFromCart,
-        updateQuantity,
-        clearCart,
-        refreshCart,
-      }}
-    >
-      {children}
-    </CartContext.Provider>
+      await guardarYActualizar(copia);
+    },
+    [items, guardarYActualizar]
   );
+
+  const removeFromCart = useCallback(
+    async (repuestoId: string) => {
+      const copia = items.filter((i) => i.repuesto.id !== repuestoId && i.repuesto.codigoOEM !== repuestoId);
+      await guardarYActualizar(copia);
+    },
+    [items, guardarYActualizar]
+  );
+
+  const updateQuantity = useCallback(
+    async (repuestoId: string, delta: number) => {
+      const overrides = await StorageService.getStockOverrides();
+      const copia = items
+        .map((i) => {
+          if (i.repuesto.id === repuestoId || i.repuesto.codigoOEM === repuestoId) {
+            const maxStock =
+              overrides[i.repuesto.id] !== undefined ? overrides[i.repuesto.id] : i.repuesto.stock;
+            const nuevaCantidad = Math.min(Math.max(1, maxStock), i.cantidad + delta);
+            return i.cantidad + delta > 0 ? { ...i, cantidad: nuevaCantidad } : null;
+          }
+          return i;
+        })
+        .filter(Boolean) as PedidoItem[];
+
+      await guardarYActualizar(copia);
+    },
+    [items, guardarYActualizar]
+  );
+
+  const clearCart = useCallback(async () => {
+    await guardarYActualizar([]);
+  }, [guardarYActualizar]);
+
+  const refreshCart = useCallback(async () => {
+    await cargarPreordenInicial();
+  }, [cargarPreordenInicial]);
+
+  const totalCount = useMemo(() => items.reduce((acc, curr) => acc + curr.cantidad, 0), [items]);
+
+  const value = useMemo(
+    () => ({
+      items,
+      totalCount,
+      subtotal,
+      igv,
+      total,
+      addToCart,
+      removeFromCart,
+      updateQuantity,
+      clearCart,
+      refreshCart,
+    }),
+    [items, totalCount, subtotal, igv, total, addToCart, removeFromCart, updateQuantity, clearCart, refreshCart]
+  );
+
+  return <CartContext.Provider value={value}>{children}</CartContext.Provider>;
 };
 
 export const useCart = () => {
