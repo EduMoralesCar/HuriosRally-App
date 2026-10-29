@@ -1,5 +1,5 @@
 import * as ImagePicker from 'expo-image-picker';
-import { Alert, Platform } from 'react-native';
+import { Alert } from 'react-native';
 
 export const CameraService = {
   async requestCameraPermission(): Promise<boolean> {
@@ -36,7 +36,7 @@ export const CameraService = {
       const result = await ImagePicker.launchCameraAsync({
         mediaTypes: ['images'],
         allowsEditing: true,
-        aspect: [1, 1], // Cuadrado óptimo para avatar de perfil
+        aspect: [1, 1],
         quality: 0.8,
       });
 
@@ -44,11 +44,11 @@ export const CameraService = {
         return result.assets[0].uri;
       }
       return null;
-    } catch (error: any) {
+    } catch (error) {
       console.error('[CameraService] Error en cámara:', error);
       Alert.alert(
         'Cámara no disponible',
-        'No se pudo abrir la cámara. Si estás en un emulador, asegúrate de que tenga una cámara virtual configurada o prueba arrastrando una foto a la Galería.'
+        'No se pudo abrir la cámara. Si estás en un emulador, verifica que tenga cámara virtual o selecciona una imagen desde la galería.'
       );
       return null;
     }
@@ -68,7 +68,7 @@ export const CameraService = {
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ['images'],
         allowsEditing: true,
-        aspect: [1, 1], // Cuadrado óptimo para avatar de perfil
+        aspect: [1, 1],
         quality: 0.8,
       });
 
@@ -76,11 +76,10 @@ export const CameraService = {
         return result.assets[0].uri;
       }
       return null;
-    } catch (error: any) {
+    } catch (error) {
       console.error('[CameraService] Error al abrir galería:', error);
       Alert.alert('Galería', 'Ocurrió un inconveniente al abrir la galería de imágenes.');
       return null;
     }
-  }
+  },
 };
-

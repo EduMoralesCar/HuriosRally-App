@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Repuesto, Usuario, PedidoLocal } from '../types';
+import { REPUESTOS_MOCK } from '../data/repuestos.mock';
 
 const KEYS = {
   AUTH_USER: '@hurios_auth_user',
@@ -10,6 +11,11 @@ const KEYS = {
   HISTORIAL_PEDIDOS: '@hurios_pedidos_historial',
   STOCK_OVERRIDES: '@hurios_stock_overrides',
 };
+
+const STOCK_BASE_MAP: Record<string, number> = REPUESTOS_MOCK.reduce((acc, item) => {
+  acc[item.id] = item.stock;
+  return acc;
+}, {} as Record<string, number>);
 
 // 3 Cuentas maestras predeterminadas (Exactamente 1 Cliente, 1 Asesor y 1 Almacenero)
 const USUARIOS_SEMILLA: Usuario[] = [
@@ -192,7 +198,10 @@ export const StorageService = {
         {
           id: 'PED-4821',
           fechaCreacion: '23/09/2026',
+          clienteId: 'usr_cliente_01',
           clienteNombre: 'Carlos Mendoza Silva',
+          creadoPorId: 'usr_cliente_01',
+          creadoPorNombre: 'Carlos Mendoza Silva',
           subtotal: 470.00,
           igv: 84.60,
           totalCotizado: 554.60,
@@ -235,6 +244,8 @@ export const StorageService = {
           id: 'PED-3904',
           fechaCreacion: '23/09/2026',
           clienteNombre: 'Transportes & Logística Rally E.I.R.L.',
+          creadoPorId: 'usr_asesor_01',
+          creadoPorNombre: 'Edu Morales Carlos',
           subtotal: 620.00,
           igv: 111.60,
           totalCotizado: 731.60,
@@ -245,15 +256,15 @@ export const StorageService = {
           items: [
             {
               repuesto: {
-                id: 'm1',
+                id: 'm2',
                 codigoOEM: '13568-39016',
-                nombre: 'Faja de Distribución / Sincronización',
+                nombre: 'Faja / Correa de Distribución Reforzada',
                 categoria: 'Motor',
-                precio: 210.00,
+                precio: 165.00,
                 stock: 14,
                 compatibilidad: 'Toyota Hilux 1KD / 2KD',
-                descripcion: 'Correa dentada reforzada con fibra de aramida.',
-                imagenUri: 'https://m.media-amazon.com/images/I/71Y+Ld6J0zL._AC_SL1500_.jpg',
+                descripcion: 'Correa dentada reforzada con fibra de vidrio.',
+                imagenUri: 'https://tse3.mm.bing.net/th/id/OIP.H_aAez5mVi2q7i5x_UtiAwHaGB?r=0&rs=1&pid=ImgDetMain&o=7&rm=3',
               },
               cantidad: 2,
             },
@@ -269,7 +280,7 @@ export const StorageService = {
                 descripcion: 'Juego de zapatas con forro adherido.',
                 imagenUri: 'https://static.wixstatic.com/media/02e9a7_d73ba103680b4ce49bd56331a1c09a46~mv2.png/v1/fill/w_909,h_825,al_c,q_90,enc_avif,quality_auto/02e9a7_d73ba103680b4ce49bd56331a1c09a46~mv2.png',
               },
-              cantidad: 1,
+              cantidad: 2,
             },
           ],
         },
@@ -284,7 +295,21 @@ export const StorageService = {
     const historial = await this.getHistorialPedidos();
     historial.unshift(pedido);
     await this.saveItem(KEYS.HISTORIAL_PEDIDOS, historial);
-    // Limpiar preorden activa
+
+    // Descontar unidades vendidas/cotizadas del stock de almacén (Kardex sincronizado)
+    const overrides = await this.getStockOverrides();
+    pedido.items.forEach((item) => {
+      const id = item.repuesto.id;
+      const base = overrides[id] !== undefined ? overrides[id] : (STOCK_BASE_MAP[id] ?? item.repuesto.stock);
+      overrides[id] = Math.max(0, base - item.cantidad);
+    });
+    await this.saveItem(KEYS.STOCK_OVERRIDES, overrides);
+
+    // Limpiar preorden activa del usuario actual y global
+    const sesion = await this.getSesion();
+    if (sesion) {
+      await this.removeItem(`${KEYS.PREORDEN}_${sesion.id}`);
+    }
     await this.removeItem(KEYS.PREORDEN);
   },
 
@@ -307,7 +332,10 @@ export const StorageService = {
 
   async updateStockItem(repuestoId: string, delta: number): Promise<number> {
     const overrides = await this.getStockOverrides();
-    const stockActual = overrides[repuestoId] !== undefined ? overrides[repuestoId] : 10;
+    const stockActual =
+      overrides[repuestoId] !== undefined
+        ? overrides[repuestoId]
+        : (STOCK_BASE_MAP[repuestoId] ?? 10);
     const nuevoStock = Math.max(0, stockActual + delta);
     overrides[repuestoId] = nuevoStock;
     await this.saveItem(KEYS.STOCK_OVERRIDES, overrides);
