@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -12,8 +12,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { Repuesto } from '../types';
 import { StorageService } from '../services/StorageService';
 import { CardRepuesto } from '../components/CardRepuesto';
-
 import { REPUESTOS_MOCK } from '../data/repuestos.mock';
+import { useCart } from '../context/CartContext';
 
 interface Props {
   navigation: any;
@@ -21,18 +21,16 @@ interface Props {
 
 export const SavedFavoritesScreen: React.FC<Props> = ({ navigation }) => {
   const [favoritos, setFavoritos] = useState<Repuesto[]>([]);
+  const [stockOverrides, setStockOverrides] = useState<Record<string, number>>({});
+  const [showClearModal, setShowClearModal] = useState(false);
+  const [toastMsg, setToastMsg] = useState<string | null>(null);
+  const { addToCart } = useCart();
 
-  useEffect(() => {
-    cargarFavoritos();
-    const unsubscribe = navigation.addListener('focus', () => {
-      cargarFavoritos();
-    });
-    return unsubscribe;
-  }, [navigation]);
-
-  const cargarFavoritos = async () => {
-    const list = await StorageService.getFavoritos();
-    // Sincronizar automáticamente con las URLs e información más reciente de repuestos.mock.ts
+  const cargarFavoritos = useCallback(async () => {
+    const [list, overrides] = await Promise.all([
+      StorageService.getFavoritos(),
+      StorageService.getStockOverrides(),
+    ]);
     const sincronizados = list.map((item) => {
       const fresco = REPUESTOS_MOCK.find(
         (r) => r.codigoOEM === item.codigoOEM || r.id === item.id
@@ -40,15 +38,33 @@ export const SavedFavoritesScreen: React.FC<Props> = ({ navigation }) => {
       return fresco ? { ...item, ...fresco } : item;
     });
     setFavoritos(sincronizados);
+    setStockOverrides(overrides);
     await StorageService.saveFavoritos(sincronizados);
-  };
+  }, []);
 
-  const [showClearModal, setShowClearModal] = useState(false);
+  useEffect(() => {
+    cargarFavoritos();
+    const unsubscribe = navigation.addListener('focus', () => {
+      cargarFavoritos();
+    });
+    return unsubscribe;
+  }, [navigation, cargarFavoritos]);
+
+  const mostrarToast = (msg: string) => {
+    setToastMsg(msg);
+    setTimeout(() => setToastMsg(null), 2200);
+  };
 
   const handleRemover = async (id: string) => {
     const updated = favoritos.filter((f) => f.id !== id);
     setFavoritos(updated);
     await StorageService.saveFavoritos(updated);
+    mostrarToast('Repuesto eliminado de favoritos');
+  };
+
+  const handleQuickAdd = async (repuesto: Repuesto) => {
+    await addToCart(repuesto, 1);
+    mostrarToast(`${repuesto.nombre} agregado a la pre-orden`);
   };
 
   const handleVaciar = () => {
@@ -64,7 +80,15 @@ export const SavedFavoritesScreen: React.FC<Props> = ({ navigation }) => {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      {/* Header */}
+      {toastMsg && (
+        <View style={styles.floatingToast}>
+          <Ionicons name="checkmark-circle" size={18} color="#10B981" />
+          <Text style={styles.floatingToastText} numberOfLines={1}>
+            {toastMsg}
+          </Text>
+        </View>
+      )}
+
       <View style={styles.header}>
         <View style={styles.iconCircle}>
           <Ionicons name="heart" size={20} color="#EF4444" />
@@ -82,18 +106,25 @@ export const SavedFavoritesScreen: React.FC<Props> = ({ navigation }) => {
         )}
       </View>
 
-      {/* Lista de Favoritos Guardados */}
       <FlatList
         data={favoritos}
         keyExtractor={(item) => item.id}
-        renderItem={({ item }) => (
-          <CardRepuesto
-            repuesto={item}
-            onPress={() => navigation.navigate('Detail', { repuesto: item })}
-            isFavorite={true}
-            onToggleFavorite={() => handleRemover(item.id)}
-          />
-        )}
+        renderItem={({ item }) => {
+          const stockActual =
+            stockOverrides[item.id] !== undefined ? stockOverrides[item.id] : item.stock;
+          return (
+            <CardRepuesto
+              repuesto={item}
+              stock={stockActual}
+              onPress={() =>
+                navigation.navigate('Detail', { repuesto: { ...item, stock: stockActual } })
+              }
+              isFavorite={true}
+              onToggleFavorite={() => handleRemover(item.id)}
+              onAddToCart={() => handleQuickAdd(item)}
+            />
+          );
+        }}
         ListEmptyComponent={
           <View style={styles.emptyBox}>
             <View style={styles.emptyIconCircle}>
@@ -114,7 +145,6 @@ export const SavedFavoritesScreen: React.FC<Props> = ({ navigation }) => {
         contentContainerStyle={{ paddingVertical: 12 }}
       />
 
-      {/* Modal Confirmación de Vaciar Favoritos */}
       <Modal visible={showClearModal} animationType="fade" transparent>
         <View style={styles.modalOverlay}>
           <View style={styles.confirmBox}>
@@ -150,6 +180,27 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#F8FAFC',
+  },
+  floatingToast: {
+    position: 'absolute',
+    bottom: 20,
+    left: 20,
+    right: 20,
+    backgroundColor: '#0F172A',
+    borderRadius: 12,
+    paddingVertical: 11,
+    paddingHorizontal: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    zIndex: 999,
+    elevation: 6,
+  },
+  floatingToastText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '700',
+    flex: 1,
   },
   header: {
     backgroundColor: '#0F172A',

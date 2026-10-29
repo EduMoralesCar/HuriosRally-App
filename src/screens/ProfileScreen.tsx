@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -9,7 +9,6 @@ import {
   TextInput,
   Modal,
   Switch,
-  Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -17,12 +16,14 @@ import { Usuario } from '../types';
 import { StorageService } from '../services/StorageService';
 import { CameraService } from '../services/CameraService';
 import { AuthService, validateStrongPassword } from '../services/AuthService';
+import { REPUESTOS_MOCK } from '../data/repuestos.mock';
+import { UMBRAL_STOCK_CRITICO } from '../utils/catalog';
+import { filtrarPedidosPorUsuario, resumirPedidos } from '../utils/orders';
 
 interface Props {
   onLogout: () => void;
 }
 
-// Opciones de sedes según la empresa Hurios Rally E.I.R.L.
 const SEDES_DISPONIBLES = [
   { id: '1', nombre: 'Lima Norte / SMP (Sede Central)', direccion: 'Av. Perú 2450, San Martín de Porres' },
   { id: '2', nombre: 'Almacén Central / Despacho SMP', direccion: 'Jr. Huancayo 312, SMP' },
@@ -30,41 +31,44 @@ const SEDES_DISPONIBLES = [
 
 export const ProfileScreen: React.FC<Props> = ({ onLogout }) => {
   const [user, setUser] = useState<Usuario | null>(null);
+  const [metricas, setMetricas] = useState({
+    pedidosCount: 0,
+    montoTotal: 0,
+    favoritosCount: 0,
+    pendientesDespacho: 0,
+    entregadosDespacho: 0,
+    stockCriticoCount: 0,
+  });
 
-  // Modales
   const [showEditModal, setShowEditModal] = useState(false);
   const [showSecurityModal, setShowSecurityModal] = useState(false);
   const [showCompanyModal, setShowCompanyModal] = useState(false);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
 
-  // Toast / Feedback animado en pantalla
-  const [feedback, setFeedback] = useState<{ tipo: 'success' | 'error' | 'info'; titulo: string; mensaje: string } | null>(null);
+  const [feedback, setFeedback] = useState<{
+    tipo: 'success' | 'error' | 'info';
+    titulo: string;
+    mensaje: string;
+  } | null>(null);
 
-  // Estados Formulario Editar Perfil
   const [nombreEdit, setNombreEdit] = useState('');
   const [telefonoEdit, setTelefonoEdit] = useState('');
   const [sedeEdit, setSedeEdit] = useState('Lima Norte / SMP (Sede Central)');
   const [showSedeDropdown, setShowSedeDropdown] = useState(false);
 
-  // Estados Formulario Seguridad y Contraseña
   const [currentPass, setCurrentPass] = useState('');
   const [newPass, setNewPass] = useState('');
   const [confirmPass, setConfirmPass] = useState('');
   const [biometricsActive, setBiometricsActive] = useState(false);
 
-  useEffect(() => {
-    cargarDatosUsuario();
-  }, []);
+  const cargarDatosUsuario = useCallback(async () => {
+    const [sesion, historial, favs, overrides] = await Promise.all([
+      StorageService.getSesion(),
+      StorageService.getHistorialPedidos(),
+      StorageService.getFavoritos(),
+      StorageService.getStockOverrides(),
+    ]);
 
-  const triggerFeedback = (tipo: 'success' | 'error' | 'info', titulo: string, mensaje: string) => {
-    setFeedback({ tipo, titulo, mensaje });
-    setTimeout(() => {
-      setFeedback(null);
-    }, 3800);
-  };
-
-  const cargarDatosUsuario = async () => {
-    const sesion = await StorageService.getSesion();
     if (sesion) {
       setUser(sesion);
       setNombreEdit(sesion.nombreCompleto);
@@ -72,7 +76,36 @@ export const ProfileScreen: React.FC<Props> = ({ onLogout }) => {
       setTelefonoEdit(telClean || '987654321');
       setSedeEdit(sesion.sede || 'Lima Norte / SMP (Sede Central)');
       setBiometricsActive(!!sesion.biometricsEnabled);
+
+      const misPedidos = filtrarPedidosPorUsuario(historial, sesion);
+      const resumenMio = resumirPedidos(misPedidos);
+      const resumenGlobal = resumirPedidos(historial);
+
+      const criticos = REPUESTOS_MOCK.filter((r) => {
+        const st = overrides[r.id] !== undefined ? overrides[r.id] : r.stock;
+        return st <= UMBRAL_STOCK_CRITICO;
+      }).length;
+
+      setMetricas({
+        pedidosCount: resumenMio.cantidad,
+        montoTotal: resumenMio.monto,
+        favoritosCount: favs.length,
+        pendientesDespacho: resumenGlobal.pendientes,
+        entregadosDespacho: resumenGlobal.entregados,
+        stockCriticoCount: criticos,
+      });
     }
+  }, []);
+
+  useEffect(() => {
+    cargarDatosUsuario();
+  }, [cargarDatosUsuario]);
+
+  const triggerFeedback = (tipo: 'success' | 'error' | 'info', titulo: string, mensaje: string) => {
+    setFeedback({ tipo, titulo, mensaje });
+    setTimeout(() => {
+      setFeedback(null);
+    }, 3800);
   };
 
   const handleTomarFotoCamara = async () => {
@@ -119,7 +152,6 @@ export const ProfileScreen: React.FC<Props> = ({ onLogout }) => {
     }
   };
 
-  // Guardar nueva contraseña
   const handleCambiarPassword = async () => {
     if (!currentPass.trim() || !newPass.trim() || !confirmPass.trim()) {
       triggerFeedback('error', 'Campos Incompletos', 'Por favor completa todos los campos de contraseña.');
@@ -128,7 +160,11 @@ export const ProfileScreen: React.FC<Props> = ({ onLogout }) => {
 
     const passVal = validateStrongPassword(newPass);
     if (!passVal.valid) {
-      triggerFeedback('error', 'Contraseña Débil', passVal.message || 'La nueva contraseña debe tener como mínimo 8 caracteres.');
+      triggerFeedback(
+        'error',
+        'Contraseña Débil',
+        passVal.message || 'La nueva contraseña debe tener como mínimo 8 caracteres.'
+      );
       return;
     }
 
@@ -151,7 +187,6 @@ export const ProfileScreen: React.FC<Props> = ({ onLogout }) => {
     }
   };
 
-  // Registro de Huella Dactilar
   const handleToggleBiometrics = async (value: boolean) => {
     if (!user) return;
 
@@ -184,7 +219,6 @@ export const ProfileScreen: React.FC<Props> = ({ onLogout }) => {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      {/* Banner / Toast de Feedback Elegante */}
       {feedback && (
         <View
           style={[
@@ -223,12 +257,17 @@ export const ProfileScreen: React.FC<Props> = ({ onLogout }) => {
         </View>
       )}
 
-      {/* Header Perfil */}
+      {/* Encabezado Perfil */}
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Mi Perfil</Text>
-        <TouchableOpacity style={styles.editBtn} onPress={() => setShowEditModal(true)}>
-          <Ionicons name="create-outline" size={22} color="#FFFFFF" />
-        </TouchableOpacity>
+        <View style={{ flexDirection: 'row', gap: 10 }}>
+          <TouchableOpacity style={styles.editBtn} onPress={cargarDatosUsuario}>
+            <Ionicons name="refresh-outline" size={21} color="#FFFFFF" />
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.editBtn} onPress={() => setShowEditModal(true)}>
+            <Ionicons name="create-outline" size={22} color="#FFFFFF" />
+          </TouchableOpacity>
+        </View>
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
@@ -245,7 +284,6 @@ export const ProfileScreen: React.FC<Props> = ({ onLogout }) => {
             />
           </View>
 
-          {/* Botones de Cámara y Galería Profesionales */}
           <View style={styles.photoActionsRow}>
             <TouchableOpacity style={styles.photoActionBtn} onPress={handleTomarFotoCamara}>
               <Ionicons name="camera" size={14} color="#0066FF" />
@@ -259,56 +297,62 @@ export const ProfileScreen: React.FC<Props> = ({ onLogout }) => {
 
           <Text style={styles.userName}>{user?.nombreCompleto || 'Edu Morales Carlos'}</Text>
           <Text style={styles.userRole}>
-            {user?.rol || 'Asesor de Ventas'} • {user?.sede || 'Lima Norte / SMP (Sede Central)'}
+            {user?.rol || 'Asesor'} • {user?.sede || 'Lima Norte / SMP (Sede Central)'}
           </Text>
           <Text style={styles.userEmail}>{user?.email || 'ventas@huriosrally.com'}</Text>
         </View>
 
-        {/* Métricas y Estadísticas adaptadas según Rol */}
+        {/* Métricas Dinámicas según Rol */}
         <View style={styles.statsCard}>
           {user?.rol === 'Asesor' ? (
             <>
               <View style={styles.statBox}>
-                <Text style={styles.statNumber}>18</Text>
+                <Text style={styles.statNumber}>{metricas.pedidosCount}</Text>
                 <Text style={styles.statLabel}>Cotizaciones</Text>
               </View>
               <View style={styles.statDivider} />
               <View style={styles.statBox}>
-                <Text style={styles.statNumber}>142</Text>
-                <Text style={styles.statLabel}>Consultas OEM</Text>
+                <Text style={styles.statNumber}>S/ {metricas.montoTotal.toFixed(0)}</Text>
+                <Text style={styles.statLabel}>Total Emitido</Text>
               </View>
               <View style={styles.statDivider} />
               <View style={styles.statBox}>
-                <Text style={styles.statNumber}>98%</Text>
-                <Text style={styles.statLabel}>Precisión Stock</Text>
+                <Text style={styles.statNumber}>{REPUESTOS_MOCK.length}</Text>
+                <Text style={styles.statLabel}>Catálogo OEM</Text>
               </View>
             </>
           ) : user?.rol === 'Almacenero' ? (
             <>
               <View style={styles.statBox}>
-                <Text style={styles.statNumber}>64</Text>
-                <Text style={styles.statLabel}>Despachos</Text>
+                <Text style={[styles.statNumber, { color: '#16A34A' }]}>
+                  {metricas.entregadosDespacho}
+                </Text>
+                <Text style={styles.statLabel}>Despachados</Text>
               </View>
               <View style={styles.statDivider} />
               <View style={styles.statBox}>
-                <Text style={styles.statNumber}>12</Text>
-                <Text style={styles.statLabel}>Ingresos Guías</Text>
+                <Text style={[styles.statNumber, { color: '#D97706' }]}>
+                  {metricas.pendientesDespacho}
+                </Text>
+                <Text style={styles.statLabel}>Por Entregar</Text>
               </View>
               <View style={styles.statDivider} />
               <View style={styles.statBox}>
-                <Text style={styles.statNumber}>100%</Text>
-                <Text style={styles.statLabel}>Kardex al Día</Text>
+                <Text style={[styles.statNumber, { color: '#DC2626' }]}>
+                  {metricas.stockCriticoCount}
+                </Text>
+                <Text style={styles.statLabel}>Stock Crítico</Text>
               </View>
             </>
           ) : (
             <>
               <View style={styles.statBox}>
-                <Text style={styles.statNumber}>4</Text>
+                <Text style={styles.statNumber}>{metricas.pedidosCount}</Text>
                 <Text style={styles.statLabel}>Mis Pedidos</Text>
               </View>
               <View style={styles.statDivider} />
               <View style={styles.statBox}>
-                <Text style={styles.statNumber}>8</Text>
+                <Text style={styles.statNumber}>{metricas.favoritosCount}</Text>
                 <Text style={styles.statLabel}>Guardados</Text>
               </View>
               <View style={styles.statDivider} />
@@ -320,7 +364,7 @@ export const ProfileScreen: React.FC<Props> = ({ onLogout }) => {
           )}
         </View>
 
-        {/* Sección: Información de la Cuenta */}
+        {/* Información de la Cuenta */}
         <View style={styles.sectionCard}>
           <Text style={styles.sectionTitle}>Información de la Cuenta</Text>
 
@@ -329,7 +373,7 @@ export const ProfileScreen: React.FC<Props> = ({ onLogout }) => {
               <Ionicons name="person-outline" size={18} color="#64748B" />
               <Text style={styles.infoLabel}>Usuario:</Text>
             </View>
-            <Text style={styles.infoValue}>{user?.username || 'admin_rally'}</Text>
+            <Text style={styles.infoValue}>@{user?.username || 'usuario'}</Text>
           </View>
 
           <View style={styles.infoRow}>
@@ -351,11 +395,10 @@ export const ProfileScreen: React.FC<Props> = ({ onLogout }) => {
           </View>
         </View>
 
-        {/* Sección: Ajustes de Seguridad y Biometría */}
+        {/* Ajustes y Seguridad */}
         <View style={styles.sectionCard}>
           <Text style={styles.sectionTitle}>Ajustes y Seguridad</Text>
 
-          {/* Opción 1: Actualizar Contraseña */}
           <TouchableOpacity
             style={styles.optionRow}
             onPress={() => setShowSecurityModal(true)}
@@ -371,7 +414,6 @@ export const ProfileScreen: React.FC<Props> = ({ onLogout }) => {
             <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
           </TouchableOpacity>
 
-          {/* Opción 2: Registro de Huella Dactilar */}
           <View style={styles.biometricSwitchRow}>
             <View style={styles.infoLeft}>
               <Ionicons name="finger-print" size={22} color="#0066FF" />
@@ -392,7 +434,6 @@ export const ProfileScreen: React.FC<Props> = ({ onLogout }) => {
             />
           </View>
 
-          {/* Opción 3: Ficha Institucional de la Empresa (Modal Elegante) */}
           <TouchableOpacity
             style={styles.optionRow}
             onPress={() => setShowCompanyModal(true)}
@@ -409,7 +450,6 @@ export const ProfileScreen: React.FC<Props> = ({ onLogout }) => {
           </TouchableOpacity>
         </View>
 
-        {/* Botón de Cierre de Sesión */}
         <TouchableOpacity
           style={styles.logoutButton}
           onPress={() => setShowLogoutModal(true)}
@@ -419,10 +459,10 @@ export const ProfileScreen: React.FC<Props> = ({ onLogout }) => {
           <Text style={styles.logoutText}>Cerrar Sesión</Text>
         </TouchableOpacity>
 
-        <Text style={styles.versionTag}>Hurios Rally App v2.0.0 (Modo Local)</Text>
+        <Text style={styles.versionTag}>Hurios Rally E.I.R.L. • v2.0.0</Text>
       </ScrollView>
 
-      {/* ================= MODAL 1: EDITAR PERFIL (DROPDOWN DE SEDES) ================= */}
+      {/* Modal: Editar Perfil */}
       <Modal visible={showEditModal} animationType="slide" transparent>
         <View style={styles.modalBg}>
           <View style={styles.modalCard}>
@@ -433,7 +473,6 @@ export const ProfileScreen: React.FC<Props> = ({ onLogout }) => {
               </TouchableOpacity>
             </View>
 
-            {/* Indicador de Identidad Fija */}
             <View style={styles.fixedAccountBox}>
               <View style={styles.fixedAccountRow}>
                 <Ionicons name="shield-checkmark" size={16} color="#0066FF" />
@@ -455,7 +494,6 @@ export const ProfileScreen: React.FC<Props> = ({ onLogout }) => {
             <Text style={styles.modalFieldLabel}>Teléfono de Contacto:</Text>
             <View style={styles.phoneInputRow}>
               <View style={styles.countryCodeBadge}>
-                <Text style={styles.countryFlag}>🇵🇪</Text>
                 <Text style={styles.countryCodeText}>+51</Text>
               </View>
               <TextInput
@@ -526,7 +564,7 @@ export const ProfileScreen: React.FC<Props> = ({ onLogout }) => {
         </View>
       </Modal>
 
-      {/* ================= MODAL 2: SEGURIDAD Y ACTUALIZAR CONTRASEÑA ================= */}
+      {/* Modal: Seguridad y Contraseña */}
       <Modal visible={showSecurityModal} animationType="slide" transparent>
         <View style={styles.modalBg}>
           <View style={styles.modalCard}>
@@ -549,7 +587,9 @@ export const ProfileScreen: React.FC<Props> = ({ onLogout }) => {
               secureTextEntry
             />
 
-            <Text style={styles.modalFieldLabel}>Nueva Contraseña (mín. 8 caracteres con mayúscula, número y símbolo) *</Text>
+            <Text style={styles.modalFieldLabel}>
+              Nueva Contraseña (mín. 8 caracteres con mayúscula, número y símbolo) *
+            </Text>
             <TextInput
               style={styles.modalInput}
               placeholder="Nueva contraseña"
@@ -574,11 +614,10 @@ export const ProfileScreen: React.FC<Props> = ({ onLogout }) => {
         </View>
       </Modal>
 
-      {/* ================= MODAL 3: FICHA DE LA EMPRESA (PROFESIONAL) ================= */}
+      {/* Modal: Ficha de la Empresa */}
       <Modal visible={showCompanyModal} animationType="fade" transparent>
         <View style={styles.modalBg}>
           <View style={styles.companyCard}>
-            {/* Header Corporativo */}
             <View style={styles.companyHeader}>
               <View style={styles.companyBadge}>
                 <Ionicons name="shield-checkmark" size={24} color="#FFFFFF" />
@@ -592,7 +631,6 @@ export const ProfileScreen: React.FC<Props> = ({ onLogout }) => {
               </TouchableOpacity>
             </View>
 
-            {/* Ficha Técnica de la Organización */}
             <ScrollView style={styles.companyBody}>
               <View style={styles.companyRow}>
                 <Ionicons name="briefcase-outline" size={18} color="#0066FF" />
@@ -629,7 +667,7 @@ export const ProfileScreen: React.FC<Props> = ({ onLogout }) => {
                 <View style={styles.companyRowText}>
                   <Text style={styles.companyLabel}>Canales Directos:</Text>
                   <Text style={styles.companyValue}>
-                    📞 Central: (01) 534-8920{'\n'}📱 WhatsApp: +51 987 654 321{'\n'}✉ ventas@huriosrally.com
+                    Central: (01) 534-8920{'\n'}WhatsApp: +51 987 654 321{'\n'}Correo: ventas@huriosrally.com
                   </Text>
                 </View>
               </View>
@@ -645,7 +683,7 @@ export const ProfileScreen: React.FC<Props> = ({ onLogout }) => {
         </View>
       </Modal>
 
-      {/* ================= MODAL 4: CONFIRMACIÓN DE CIERRE DE SESIÓN ================= */}
+      {/* Modal: Confirmación de Cierre de Sesión */}
       <Modal visible={showLogoutModal} animationType="fade" transparent>
         <View style={styles.modalBg}>
           <View style={styles.logoutModalCard}>
@@ -1000,11 +1038,7 @@ const styles = StyleSheet.create({
     borderColor: '#CBD5E1',
     borderRadius: 10,
     height: 46,
-    paddingHorizontal: 10,
-    gap: 5,
-  },
-  countryFlag: {
-    fontSize: 16,
+    paddingHorizontal: 12,
   },
   countryCodeText: {
     fontSize: 13,

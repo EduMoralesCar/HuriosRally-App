@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -8,11 +8,14 @@ import {
   ScrollView,
   Modal,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Repuesto } from '../types';
 import { StorageService } from '../services/StorageService';
 import { CameraService } from '../services/CameraService';
 import { useCart } from '../context/CartContext';
+import { ProductImage } from '../components/ProductImage';
+import { getInfoStock, getMarca, formatearSoles } from '../utils/catalog';
 
 interface Props {
   route: any;
@@ -21,27 +24,34 @@ interface Props {
 
 export const DetailScreen: React.FC<Props> = ({ route, navigation }) => {
   const { repuesto }: { repuesto: Repuesto } = route.params;
+  const [stockReal, setStockReal] = useState<number>(repuesto.stock);
   const [cantidad, setCantidad] = useState(1);
   const [isFavorite, setIsFavorite] = useState(false);
-  const [fotoCapturada, setFotoCapturada] = useState<string | null>(null);
+  const [fotoCapturada, setFotoCapturada] = useState<string | null>(repuesto.fotoInspeccionUri || null);
   const [showCameraModal, setShowCameraModal] = useState(false);
   const [toast, setToast] = useState<{ visible: boolean; mensaje: string; tipo: 'success' | 'info' } | null>(null);
   const { addToCart } = useCart();
 
+  const cargarDatos = useCallback(async () => {
+    const [favs, overrides] = await Promise.all([
+      StorageService.getFavoritos(),
+      StorageService.getStockOverrides(),
+    ]);
+    setIsFavorite(favs.some((f) => f.id === repuesto.id));
+    const stockActual = overrides[repuesto.id] !== undefined ? overrides[repuesto.id] : repuesto.stock;
+    setStockReal(stockActual);
+    setCantidad((prev) => (stockActual > 0 ? Math.min(prev, stockActual) : 1));
+  }, [repuesto.id, repuesto.stock]);
+
   useEffect(() => {
-    checkFavoriteStatus();
-  }, []);
+    cargarDatos();
+  }, [cargarDatos]);
 
   const showToastMsg = (mensaje: string, tipo: 'success' | 'info' = 'success') => {
     setToast({ visible: true, mensaje, tipo });
     setTimeout(() => {
       setToast(null);
     }, 2800);
-  };
-
-  const checkFavoriteStatus = async () => {
-    const favs = await StorageService.getFavoritos();
-    setIsFavorite(favs.some((f) => f.id === repuesto.id));
   };
 
   const handleToggleFavorite = async () => {
@@ -53,23 +63,27 @@ export const DetailScreen: React.FC<Props> = ({ route, navigation }) => {
     } else {
       favs.push(repuesto);
       setIsFavorite(true);
-      showToastMsg(`${repuesto.nombre} guardado en favoritos ❤️`, 'success');
+      showToastMsg(`${repuesto.nombre} guardado en favoritos`, 'success');
     }
     await StorageService.saveFavoritos(favs);
   };
 
   const handleAgregarPreOrden = async () => {
+    if (stockReal <= 0) {
+      showToastMsg('Este repuesto se encuentra agotado en almacén', 'info');
+      return;
+    }
     await addToCart(
       {
         ...repuesto,
+        stock: stockReal,
         fotoInspeccionUri: fotoCapturada || undefined,
       },
       cantidad
     );
-    showToastMsg(`✓ ${cantidad} unidad(es) agregada(s) a la pre-orden`, 'success');
+    showToastMsg(`${cantidad} unidad(es) agregada(s) a la pre-orden`, 'success');
   };
 
-  // Abrir cámara nativa o modal de inspección (Figura A4)
   const handleTomarFoto = async () => {
     const uri = await CameraService.takePhoto();
     if (uri) {
@@ -86,9 +100,12 @@ export const DetailScreen: React.FC<Props> = ({ route, navigation }) => {
     }
   };
 
+  const infoStock = getInfoStock(stockReal);
+  const marca = getMarca(repuesto);
+  const agotado = infoStock.estado === 'agotado';
+
   return (
-    <View style={styles.container}>
-      {/* Toast Notificación Flotante */}
+    <SafeAreaView style={styles.container} edges={['top']}>
       {toast && (
         <View
           style={[
@@ -105,30 +122,27 @@ export const DetailScreen: React.FC<Props> = ({ route, navigation }) => {
         </View>
       )}
 
-      {/* Header Personalizado (Figura A3) */}
+      {/* Encabezado */}
       <View style={styles.header}>
         <TouchableOpacity style={styles.headerIconBtn} onPress={() => navigation.goBack()}>
           <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Detalle del Repuesto</Text>
-        <TouchableOpacity style={styles.headerIconBtn} onPress={handleToggleFavorite}>
-          <Ionicons
-            name={isFavorite ? 'heart' : 'heart-outline'}
-            size={24}
-            color={isFavorite ? '#EF4444' : '#FFFFFF'}
-          />
-        </TouchableOpacity>
+        <View style={styles.headerRightGroup}>
+          <TouchableOpacity style={styles.headerIconBtn} onPress={handleToggleFavorite}>
+            <Ionicons
+              name={isFavorite ? 'heart' : 'heart-outline'}
+              size={24}
+              color={isFavorite ? '#EF4444' : '#FFFFFF'}
+            />
+          </TouchableOpacity>
+        </View>
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        {/* Imagen Principal del Repuesto con Paginador de Puntitos */}
+        {/* Imagen del Repuesto */}
         <View style={styles.imageCard}>
-          <Image source={{ uri: repuesto.imagenUri }} style={styles.image} resizeMode="contain" />
-          <View style={styles.dotsRow}>
-            <View style={[styles.dot, styles.dotActive]} />
-            <View style={styles.dot} />
-            <View style={styles.dot} />
-          </View>
+          <ProductImage uri={repuesto.imagenUri} style={styles.image} resizeMode="contain" iconSize={44} />
         </View>
 
         {/* Información Comercial */}
@@ -136,22 +150,23 @@ export const DetailScreen: React.FC<Props> = ({ route, navigation }) => {
           <Text style={styles.nombre}>{repuesto.nombre}</Text>
           <Text style={styles.oem}>OEM: {repuesto.codigoOEM}</Text>
 
-          {/* Marca con logo / texto */}
           <View style={styles.brandRow}>
             <Ionicons name="shield-checkmark" size={16} color="#DC2626" />
-            <Text style={styles.brandText}>Toyota Genuine Parts</Text>
+            <Text style={styles.brandText}>
+              {marca === 'Universal' ? 'Uso Universal Automotriz' : `Repuesto Compatible ${marca}`}
+            </Text>
           </View>
 
-          {/* Precio y Estado En Stock */}
           <View style={styles.priceRow}>
-            <Text style={styles.precio}>S/ {repuesto.precio.toFixed(2)}</Text>
-            <View style={styles.stockBadge}>
-              <Ionicons name="checkmark-circle" size={14} color="#10B981" />
-              <Text style={styles.stockText}>En stock</Text>
+            <Text style={styles.precio}>{formatearSoles(repuesto.precio)}</Text>
+            <View style={[styles.stockBadge, { backgroundColor: infoStock.fondo }]}>
+              <Ionicons name={infoStock.icono} size={14} color={infoStock.color} />
+              <Text style={[styles.stockText, { color: infoStock.color }]}>
+                {infoStock.etiqueta} ({stockReal} unid.)
+              </Text>
             </View>
           </View>
 
-          {/* Calificación y Reseñas */}
           <View style={styles.ratingRow}>
             <View style={styles.stars}>
               {[1, 2, 3, 4, 5].map((s) => (
@@ -159,17 +174,16 @@ export const DetailScreen: React.FC<Props> = ({ route, navigation }) => {
               ))}
             </View>
             <Text style={styles.ratingText}>
-              {repuesto.rating || 4.8} ({repuesto.numReviews || 120} reseñas)
+              {repuesto.rating || 4.8} ({repuesto.numReviews || 120} reseñas verificadas)
             </Text>
           </View>
 
-          {/* Descripción Técnica */}
           <View style={styles.descBlock}>
-            <Text style={styles.sectionHeading}>Descripción</Text>
+            <Text style={styles.sectionHeading}>Descripción Técnica</Text>
             <Text style={styles.descText}>{repuesto.descripcion}</Text>
           </View>
 
-          {/* Tabla de Especificaciones Técnicas */}
+          {/* Especificaciones Técnicas */}
           <View style={styles.specsCard}>
             <View style={styles.specItem}>
               <View style={styles.specLabelGroup}>
@@ -184,7 +198,9 @@ export const DetailScreen: React.FC<Props> = ({ route, navigation }) => {
                 <Ionicons name="car-outline" size={16} color="#64748B" />
                 <Text style={styles.specLabel}>Compatibilidad</Text>
               </View>
-              <Text style={styles.specValue}>{repuesto.compatibilidad}</Text>
+              <Text style={[styles.specValue, { maxWidth: '58%', textAlign: 'right' }]} numberOfLines={2}>
+                {repuesto.compatibilidad}
+              </Text>
             </View>
 
             <View style={styles.specItem}>
@@ -198,55 +214,69 @@ export const DetailScreen: React.FC<Props> = ({ route, navigation }) => {
             <View style={[styles.specItem, { borderBottomWidth: 0 }]}>
               <View style={styles.specLabelGroup}>
                 <Ionicons name="ribbon-outline" size={16} color="#64748B" />
-                <Text style={styles.specLabel}>Marca</Text>
+                <Text style={styles.specLabel}>Marca / Línea</Text>
               </View>
-              <Text style={styles.specValue}>Toyota</Text>
+              <Text style={styles.specValue}>{marca}</Text>
             </View>
           </View>
 
           {/* Control de Cantidad */}
           <View style={styles.quantityRow}>
-            <Text style={styles.quantityLabel}>Cantidad</Text>
+            <View>
+              <Text style={styles.quantityLabel}>Cantidad a solicitar</Text>
+              <Text style={styles.quantitySub}>
+                {agotado ? 'Sin disponibilidad en anaquel' : `Máximo disponible: ${stockReal} unid.`}
+              </Text>
+            </View>
             <View style={styles.quantityControls}>
               <TouchableOpacity
                 style={styles.qtyBtn}
+                disabled={agotado || cantidad <= 1}
                 onPress={() => setCantidad(Math.max(1, cantidad - 1))}
               >
-                <Text style={styles.qtyBtnText}>-</Text>
+                <Text style={[styles.qtyBtnText, (agotado || cantidad <= 1) && { color: '#CBD5E1' }]}>-</Text>
               </TouchableOpacity>
-              <Text style={styles.qtyNumber}>{cantidad}</Text>
+              <Text style={styles.qtyNumber}>{agotado ? 0 : cantidad}</Text>
               <TouchableOpacity
                 style={styles.qtyBtn}
-                onPress={() => setCantidad(cantidad + 1)}
+                disabled={agotado || cantidad >= stockReal}
+                onPress={() => setCantidad(Math.min(stockReal, cantidad + 1))}
               >
-                <Text style={styles.qtyBtnText}>+</Text>
+                <Text style={[styles.qtyBtnText, (agotado || cantidad >= stockReal) && { color: '#CBD5E1' }]}>+</Text>
               </TouchableOpacity>
             </View>
           </View>
 
-          {/* Fotografía Capturada (Si existe inspección) */}
           {fotoCapturada && (
             <View style={styles.inspeccionCard}>
               <View style={styles.inspeccionBadge}>
                 <Ionicons name="checkmark-circle" size={15} color="#10B981" />
-                <Text style={styles.inspeccionBadgeText}>Fotografía guardada correctamente</Text>
+                <Text style={styles.inspeccionBadgeText}>Fotografía de inspección adjunta</Text>
               </View>
               <Image source={{ uri: fotoCapturada }} style={styles.inspeccionImage} />
               <Text style={styles.inspeccionNota}>
-                Inspección visual asociada al lote de almacén.
+                Inspección visual asociada al lote de almacén SMP.
               </Text>
             </View>
           )}
 
-          {/* Botones de Acción (Figura A3) */}
+          {/* Acciones */}
           <View style={styles.actionButtonsRow}>
             <TouchableOpacity
-              style={styles.btnPreorden}
+              style={[styles.btnPreorden, agotado && styles.btnPreordenDisabled]}
               onPress={handleAgregarPreOrden}
+              disabled={agotado}
               activeOpacity={0.8}
             >
-              <Ionicons name="cart-outline" size={18} color="#0066FF" style={{ marginRight: 6 }} />
-              <Text style={styles.btnPreordenText}>Agregar a Pre-orden</Text>
+              <Ionicons
+                name={agotado ? 'ban-outline' : 'cart-outline'}
+                size={18}
+                color={agotado ? '#94A3B8' : '#0066FF'}
+                style={{ marginRight: 6 }}
+              />
+              <Text style={[styles.btnPreordenText, agotado && { color: '#94A3B8' }]}>
+                {agotado ? 'Sin Stock' : 'Agregar a Pre-orden'}
+              </Text>
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -255,18 +285,25 @@ export const DetailScreen: React.FC<Props> = ({ route, navigation }) => {
               activeOpacity={0.8}
             >
               <Ionicons name="camera-outline" size={18} color="#FFFFFF" style={{ marginRight: 6 }} />
-              <Text style={styles.btnCamaraText}>Verificar con Cámara</Text>
+              <Text style={styles.btnCamaraText}>Verificar Cámara</Text>
             </TouchableOpacity>
           </View>
+
+          <TouchableOpacity style={styles.galleryLinkBtn} onPress={handlePickGaleria} activeOpacity={0.75}>
+            <Ionicons name="images-outline" size={16} color="#475569" />
+            <Text style={styles.galleryLinkText}>
+              O seleccionar foto de pieza desde la galería del dispositivo
+            </Text>
+          </TouchableOpacity>
         </View>
       </ScrollView>
 
-      {/* Modal: Previsualización de Foto Capturada (Figura A4) */}
+      {/* Modal: Previsualización de Foto Capturada */}
       <Modal visible={showCameraModal} animationType="slide" transparent>
         <View style={styles.modalBg}>
           <View style={styles.modalBox}>
             <View style={styles.modalTopBar}>
-              <Text style={styles.modalTopTitle}>Foto Capturada</Text>
+              <Text style={styles.modalTopTitle}>Inspección de Repuesto</Text>
               <TouchableOpacity onPress={() => setShowCameraModal(false)}>
                 <Ionicons name="close" size={24} color="#0F172A" />
               </TouchableOpacity>
@@ -284,13 +321,13 @@ export const DetailScreen: React.FC<Props> = ({ route, navigation }) => {
             <View style={styles.modalItemResume}>
               <Text style={styles.modalItemTitle}>{repuesto.nombre}</Text>
               <Text style={styles.modalItemOEM}>OEM: {repuesto.codigoOEM}</Text>
-              <Text style={styles.modalItemPrice}>S/ {repuesto.precio.toFixed(2)}</Text>
+              <Text style={styles.modalItemPrice}>{formatearSoles(repuesto.precio)}</Text>
             </View>
 
             <View style={styles.modalButtons}>
               <TouchableOpacity style={styles.modalBtnSec} onPress={handleTomarFoto}>
                 <Ionicons name="camera-reverse-outline" size={16} color="#0066FF" style={{ marginRight: 4 }} />
-                <Text style={styles.modalBtnSecText}>Tomar otra foto</Text>
+                <Text style={styles.modalBtnSecText}>Otra foto</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
@@ -304,7 +341,7 @@ export const DetailScreen: React.FC<Props> = ({ route, navigation }) => {
           </View>
         </View>
       </Modal>
-    </View>
+    </SafeAreaView>
   );
 };
 
@@ -323,6 +360,11 @@ const styles = StyleSheet.create({
   },
   headerIconBtn: {
     padding: 4,
+  },
+  headerRightGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
   headerTitle: {
     color: '#FFFFFF',
@@ -345,21 +387,6 @@ const styles = StyleSheet.create({
   image: {
     width: '100%',
     height: 190,
-  },
-  dotsRow: {
-    flexDirection: 'row',
-    marginTop: 12,
-    gap: 6,
-  },
-  dot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: '#CBD5E1',
-  },
-  dotActive: {
-    width: 18,
-    backgroundColor: '#0066FF',
   },
   infoSection: {
     paddingHorizontal: 18,
@@ -401,7 +428,6 @@ const styles = StyleSheet.create({
   stockBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#ECFDF5',
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 8,
@@ -409,7 +435,6 @@ const styles = StyleSheet.create({
   },
   stockText: {
     fontSize: 12,
-    color: '#059669',
     fontWeight: '700',
   },
   ratingRow: {
@@ -482,6 +507,11 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '700',
     color: '#0F172A',
+  },
+  quantitySub: {
+    fontSize: 11.5,
+    color: '#64748B',
+    marginTop: 2,
   },
   quantityControls: {
     flexDirection: 'row',
@@ -557,6 +587,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  btnPreordenDisabled: {
+    borderColor: '#CBD5E1',
+    backgroundColor: '#F1F5F9',
+  },
   btnPreordenText: {
     color: '#0066FF',
     fontSize: 13.5,
@@ -575,6 +609,20 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 13.5,
     fontWeight: '700',
+  },
+  galleryLinkBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    marginTop: 12,
+    paddingVertical: 8,
+  },
+  galleryLinkText: {
+    fontSize: 12,
+    color: '#475569',
+    fontWeight: '600',
+    textDecorationLine: 'underline',
   },
   modalBg: {
     flex: 1,
@@ -672,7 +720,7 @@ const styles = StyleSheet.create({
   },
   floatingToast: {
     position: 'absolute',
-    top: 50,
+    top: 56,
     left: 20,
     right: 20,
     zIndex: 999,
