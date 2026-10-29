@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -6,7 +6,6 @@ import {
   StyleSheet,
   TouchableOpacity,
   Modal,
-  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -20,7 +19,13 @@ interface Props {
 export const WarehouseDispatchScreen: React.FC<Props> = ({ navigation }) => {
   const [pedidos, setPedidos] = useState<PedidoLocal[]>([]);
   const [filtroEstado, setFiltroEstado] = useState<'Todos' | 'Pendientes' | 'Entregados'>('Pendientes');
-  const [pedidoDetalle, setPedidoDetalle] = useState<PedidoLocal | null>(null);
+  const [pedidoPorDespachar, setPedidoPorDespachar] = useState<PedidoLocal | null>(null);
+  const [toastMsg, setToastMsg] = useState<string | null>(null);
+
+  const cargarPedidos = useCallback(async () => {
+    const list = await StorageService.getHistorialPedidos();
+    setPedidos(list);
+  }, []);
 
   useEffect(() => {
     cargarPedidos();
@@ -28,33 +33,16 @@ export const WarehouseDispatchScreen: React.FC<Props> = ({ navigation }) => {
       cargarPedidos();
     });
     return unsubscribe;
-  }, [navigation]);
+  }, [navigation, cargarPedidos]);
 
-  const cargarPedidos = async () => {
-    const list = await StorageService.getHistorialPedidos();
-    setPedidos(list);
-  };
-
-  const handleMarcarEntregado = async (pedido: PedidoLocal) => {
-    if (!pedido.id) return;
-    
-    Alert.alert(
-      'Confirmar Despacho',
-      `¿Confirmas que los repuestos del pedido ${pedido.id} han sido extraídos de almacén y entregados al cliente o asesor?`,
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        {
-          text: 'Sí, Despachar',
-          onPress: async () => {
-            await StorageService.updatePedidoEstado(pedido.id!, 'Entregado');
-            await cargarPedidos();
-            if (pedidoDetalle && pedidoDetalle.id === pedido.id) {
-              setPedidoDetalle({ ...pedidoDetalle, estado: 'Entregado' });
-            }
-          },
-        },
-      ]
-    );
+  const confirmarDespacho = async () => {
+    if (!pedidoPorDespachar?.id) return;
+    const id = pedidoPorDespachar.id;
+    await StorageService.updatePedidoEstado(id, 'Entregado');
+    setPedidoPorDespachar(null);
+    await cargarPedidos();
+    setToastMsg(`Orden ${id} marcada como Entregada`);
+    setTimeout(() => setToastMsg(null), 2500);
   };
 
   const pedidosFiltrados = pedidos.filter((p) => {
@@ -72,7 +60,14 @@ export const WarehouseDispatchScreen: React.FC<Props> = ({ navigation }) => {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      {/* Header Corporativo de Almacén */}
+      {toastMsg && (
+        <View style={styles.floatingToast}>
+          <Ionicons name="checkmark-circle" size={18} color="#10B981" />
+          <Text style={styles.floatingToastText}>{toastMsg}</Text>
+        </View>
+      )}
+
+      {/* Header Almacén */}
       <View style={styles.header}>
         <View>
           <Text style={styles.headerTitle}>Control de Despachos</Text>
@@ -83,7 +78,7 @@ export const WarehouseDispatchScreen: React.FC<Props> = ({ navigation }) => {
         </TouchableOpacity>
       </View>
 
-      {/* Tarjeta de Resumen Operativo */}
+      {/* Resumen Operativo */}
       <View style={styles.statsBanner}>
         <View style={styles.statItem}>
           <Text style={styles.statValOrange}>{totalPendientes}</Text>
@@ -112,7 +107,12 @@ export const WarehouseDispatchScreen: React.FC<Props> = ({ navigation }) => {
             size={16}
             color={filtroEstado === 'Pendientes' ? '#FFFFFF' : '#D97706'}
           />
-          <Text style={[styles.filterTabText, filtroEstado === 'Pendientes' && styles.filterTabTextActive]}>
+          <Text
+            style={[
+              styles.filterTabText,
+              filtroEstado === 'Pendientes' && styles.filterTabTextActive,
+            ]}
+          >
             Pendientes ({totalPendientes})
           </Text>
         </TouchableOpacity>
@@ -126,7 +126,12 @@ export const WarehouseDispatchScreen: React.FC<Props> = ({ navigation }) => {
             size={16}
             color={filtroEstado === 'Entregados' ? '#FFFFFF' : '#16A34A'}
           />
-          <Text style={[styles.filterTabText, filtroEstado === 'Entregados' && styles.filterTabTextActive]}>
+          <Text
+            style={[
+              styles.filterTabText,
+              filtroEstado === 'Entregados' && styles.filterTabTextActive,
+            ]}
+          >
             Despachados ({totalEntregados})
           </Text>
         </TouchableOpacity>
@@ -135,16 +140,18 @@ export const WarehouseDispatchScreen: React.FC<Props> = ({ navigation }) => {
           style={[styles.filterTab, filtroEstado === 'Todos' && styles.filterTabActiveBlue]}
           onPress={() => setFiltroEstado('Todos')}
         >
-          <Text style={[styles.filterTabText, filtroEstado === 'Todos' && styles.filterTabTextActive]}>
+          <Text
+            style={[styles.filterTabText, filtroEstado === 'Todos' && styles.filterTabTextActive]}
+          >
             Todos
           </Text>
         </TouchableOpacity>
       </View>
 
-      {/* Lista de Órdenes a Despachar */}
+      {/* Lista de Órdenes */}
       <FlatList
         data={pedidosFiltrados}
-        keyExtractor={(item) => item.id || Math.random().toString()}
+        keyExtractor={(item, index) => item.id || `ped-${index}`}
         renderItem={({ item }) => {
           const esEntregado = item.estado === 'Entregado';
 
@@ -153,10 +160,12 @@ export const WarehouseDispatchScreen: React.FC<Props> = ({ navigation }) => {
               <View style={styles.orderCardHeader}>
                 <View>
                   <Text style={styles.orderId}>{item.id || 'PED-S/N'}</Text>
-                  <Text style={styles.orderDate}>Fecha: {item.fechaCreacion}</Text>
+                  <Text style={styles.orderDate}>
+                    Fecha: {item.fechaCreacion}
+                    {item.creadoPorNombre ? ` • Emitido por: ${item.creadoPorNombre}` : ''}
+                  </Text>
                 </View>
 
-                {/* Badge de Estado */}
                 <View
                   style={[
                     styles.statusBadge,
@@ -180,39 +189,56 @@ export const WarehouseDispatchScreen: React.FC<Props> = ({ navigation }) => {
                 </View>
               </View>
 
-              {/* Datos del Cliente y Comprobante */}
               <View style={styles.clientDetailRow}>
                 <Ionicons name="person-outline" size={15} color="#475569" />
                 <Text style={styles.clientNameText}>
-                  Cliente: <Text style={{ fontWeight: '700', color: '#0F172A' }}>{item.clienteNombre || 'Cliente'}</Text>
+                  Cliente:{' '}
+                  <Text style={{ fontWeight: '700', color: '#0F172A' }}>
+                    {item.clienteNombre || 'Cliente'}
+                  </Text>
+                  {item.clienteTelefono ? ` (${item.clienteTelefono})` : ''}
                 </Text>
               </View>
 
               <View style={styles.metaRow}>
-                <Text style={styles.metaText}>
-                  📄 {item.comprobanteTipo || 'Boleta'} {item.documentoNumero ? `(${item.documentoNumero})` : ''}
-                </Text>
-                <Text style={styles.metaText}>💳 {item.metodoPago || 'Efectivo'}</Text>
+                <View style={styles.metaItem}>
+                  <Ionicons name="document-text-outline" size={13} color="#64748B" />
+                  <Text style={styles.metaText}>
+                    {item.comprobanteTipo || 'Boleta'}{' '}
+                    {item.documentoNumero ? `(${item.documentoNumero})` : ''}
+                  </Text>
+                </View>
+                <View style={styles.metaItem}>
+                  <Ionicons name="card-outline" size={13} color="#64748B" />
+                  <Text style={styles.metaText}>
+                    {item.metodoPago || 'Efectivo'}
+                    {item.numOperacion ? ` #${item.numOperacion}` : ''}
+                  </Text>
+                </View>
               </View>
 
-              {/* Lista de Ítems / Repuestos a Preparar */}
               <View style={styles.itemsBox}>
-                <Text style={styles.itemsBoxTitle}>REPUESTOS A DESPACHAR ({item.items.length}):</Text>
+                <Text style={styles.itemsBoxTitle}>
+                  REPUESTOS A DESPACHAR ({item.items.length}):
+                </Text>
                 {item.items.map((it, idx) => (
                   <View key={idx} style={styles.itemRow}>
                     <View style={styles.qtyBadge}>
                       <Text style={styles.qtyBadgeText}>{it.cantidad}x</Text>
                     </View>
                     <View style={{ flex: 1 }}>
-                      <Text style={styles.itemNombre} numberOfLines={1}>{it.repuesto.nombre}</Text>
+                      <Text style={styles.itemNombre} numberOfLines={1}>
+                        {it.repuesto.nombre}
+                      </Text>
                       <Text style={styles.itemOEM}>OEM: {it.repuesto.codigoOEM}</Text>
                     </View>
-                    <Text style={styles.itemPrice}>S/ {(it.repuesto.precio * it.cantidad).toFixed(2)}</Text>
+                    <Text style={styles.itemPrice}>
+                      S/ {(it.repuesto.precio * it.cantidad).toFixed(2)}
+                    </Text>
                   </View>
                 ))}
               </View>
 
-              {/* Botón de Acción Principal para Almacén */}
               <View style={styles.actionsFooter}>
                 <View>
                   <Text style={styles.totalLbl}>Total del Pedido</Text>
@@ -222,15 +248,25 @@ export const WarehouseDispatchScreen: React.FC<Props> = ({ navigation }) => {
                 {!esEntregado ? (
                   <TouchableOpacity
                     style={styles.btnDespachar}
-                    onPress={() => handleMarcarEntregado(item)}
+                    onPress={() => setPedidoPorDespachar(item)}
                     activeOpacity={0.85}
                   >
-                    <Ionicons name="checkmark-circle-outline" size={18} color="#FFFFFF" style={{ marginRight: 6 }} />
+                    <Ionicons
+                      name="checkmark-circle-outline"
+                      size={18}
+                      color="#FFFFFF"
+                      style={{ marginRight: 6 }}
+                    />
                     <Text style={styles.btnDespacharText}>Marcar Entregado</Text>
                   </TouchableOpacity>
                 ) : (
                   <View style={styles.entregadoTag}>
-                    <Ionicons name="checkmark-done" size={16} color="#16A34A" style={{ marginRight: 4 }} />
+                    <Ionicons
+                      name="checkmark-done"
+                      size={16}
+                      color="#16A34A"
+                      style={{ marginRight: 4 }}
+                    />
                     <Text style={styles.entregadoTagText}>Despachado</Text>
                   </View>
                 )}
@@ -249,6 +285,41 @@ export const WarehouseDispatchScreen: React.FC<Props> = ({ navigation }) => {
           </View>
         }
       />
+
+      {/* Modal de Confirmación de Despacho */}
+      <Modal visible={!!pedidoPorDespachar} animationType="fade" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={styles.confirmModalCard}>
+            <View style={styles.confirmIconCircle}>
+              <Ionicons name="cube" size={30} color="#059669" />
+            </View>
+            <Text style={styles.confirmTitle}>Confirmar Despacho</Text>
+            <Text style={styles.confirmDesc}>
+              ¿Confirmas que los repuestos de la orden{' '}
+              <Text style={{ fontWeight: '800', color: '#0F172A' }}>
+                {pedidoPorDespachar?.id}
+              </Text>{' '}
+              para{' '}
+              <Text style={{ fontWeight: '800', color: '#0F172A' }}>
+                {pedidoPorDespachar?.clienteNombre}
+              </Text>{' '}
+              fueron entregados en mostrador?
+            </Text>
+
+            <View style={styles.confirmBtnRow}>
+              <TouchableOpacity
+                style={styles.cancelBtn}
+                onPress={() => setPedidoPorDespachar(null)}
+              >
+                <Text style={styles.cancelBtnText}>Cancelar</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.confirmBtn} onPress={confirmarDespacho}>
+                <Text style={styles.confirmBtnText}>Sí, Despachar</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -257,6 +328,27 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#F8FAFC',
+  },
+  floatingToast: {
+    position: 'absolute',
+    bottom: 20,
+    left: 20,
+    right: 20,
+    backgroundColor: '#0F172A',
+    borderRadius: 12,
+    paddingVertical: 11,
+    paddingHorizontal: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    zIndex: 999,
+    elevation: 6,
+  },
+  floatingToastText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '700',
+    flex: 1,
   },
   header: {
     backgroundColor: '#0F172A',
@@ -432,6 +524,11 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginBottom: 10,
   },
+  metaItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
   metaText: {
     fontSize: 11.5,
     color: '#64748B',
@@ -549,5 +646,70 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: 4,
     lineHeight: 18,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.65)',
+    justifyContent: 'center',
+    padding: 22,
+  },
+  confirmModalCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    padding: 22,
+    alignItems: 'center',
+  },
+  confirmIconCircle: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: '#ECFDF5',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 14,
+  },
+  confirmTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#0F172A',
+    marginBottom: 8,
+  },
+  confirmDesc: {
+    fontSize: 13,
+    color: '#64748B',
+    textAlign: 'center',
+    lineHeight: 19,
+    marginBottom: 20,
+  },
+  confirmBtnRow: {
+    flexDirection: 'row',
+    gap: 10,
+    width: '100%',
+  },
+  cancelBtn: {
+    flex: 1,
+    height: 46,
+    borderRadius: 12,
+    backgroundColor: '#F1F5F9',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  cancelBtnText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#475569',
+  },
+  confirmBtn: {
+    flex: 1,
+    height: 46,
+    borderRadius: 12,
+    backgroundColor: '#059669',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  confirmBtnText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#FFFFFF',
   },
 });

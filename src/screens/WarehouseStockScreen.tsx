@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   View,
   Text,
@@ -6,23 +6,37 @@ import {
   StyleSheet,
   TouchableOpacity,
   TextInput,
-  Image,
-  Alert,
+  ScrollView,
+  Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { REPUESTOS_MOCK } from '../data/repuestos.mock';
 import { StorageService } from '../services/StorageService';
 import { Repuesto, CategoriaRepuesto } from '../types';
+import { ProductImage } from '../components/ProductImage';
+import { useDebouncedValue } from '../hooks/useDebouncedValue';
+import { normalizarTexto, UMBRAL_STOCK_CRITICO } from '../utils/catalog';
+import { soloDigitos } from '../utils/validators';
 
 interface Props {
   navigation: any;
 }
 
+type FiltroKardex = CategoriaRepuesto | 'Críticos';
+
 export const WarehouseStockScreen: React.FC<Props> = ({ navigation }) => {
   const [search, setSearch] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState<CategoriaRepuesto>('Todos');
+  const debouncedSearch = useDebouncedValue(search, 180);
+  const [selectedCategory, setSelectedCategory] = useState<FiltroKardex>('Todos');
   const [stockOverrides, setStockOverrides] = useState<Record<string, number>>({});
+  const [itemEditando, setItemEditando] = useState<Repuesto | null>(null);
+  const [cantidadManual, setCantidadManual] = useState('');
+
+  const cargarStockOverrides = useCallback(async () => {
+    const overrides = await StorageService.getStockOverrides();
+    setStockOverrides(overrides);
+  }, []);
 
   useEffect(() => {
     cargarStockOverrides();
@@ -30,19 +44,17 @@ export const WarehouseStockScreen: React.FC<Props> = ({ navigation }) => {
       cargarStockOverrides();
     });
     return unsubscribe;
-  }, [navigation]);
+  }, [navigation, cargarStockOverrides]);
 
-  const cargarStockOverrides = async () => {
-    const overrides = await StorageService.getStockOverrides();
-    setStockOverrides(overrides);
-  };
-
-  const getStockActual = (repuesto: Repuesto): number => {
-    if (stockOverrides[repuesto.id] !== undefined) {
-      return stockOverrides[repuesto.id];
-    }
-    return repuesto.stock;
-  };
+  const getStockActual = useCallback(
+    (repuesto: Repuesto): number => {
+      if (stockOverrides[repuesto.id] !== undefined) {
+        return stockOverrides[repuesto.id];
+      }
+      return repuesto.stock;
+    },
+    [stockOverrides]
+  );
 
   const handleAjustarStock = async (repuesto: Repuesto, delta: number) => {
     const actual = getStockActual(repuesto);
@@ -51,33 +63,47 @@ export const WarehouseStockScreen: React.FC<Props> = ({ navigation }) => {
     setStockOverrides((prev) => ({ ...prev, [repuesto.id]: nuevo }));
   };
 
-  const handleIngresoManual = (repuesto: Repuesto) => {
-    Alert.prompt
-      ? Alert.prompt(
-          'Ingreso de Mercadería',
-          `Ingresa la cantidad física recibida para: ${repuesto.nombre}`,
-          async (text) => {
-            const num = parseInt(text, 10);
-            if (!isNaN(num) && num >= 0) {
-              await StorageService.setStockItem(repuesto.id, num);
-              setStockOverrides((prev) => ({ ...prev, [repuesto.id]: num }));
-            }
-          },
-          'plain-text',
-          getStockActual(repuesto).toString(),
-          'numeric'
-        )
-      : handleAjustarStock(repuesto, 1);
+  const abrirModalIngresoManual = (repuesto: Repuesto) => {
+    setItemEditando(repuesto);
+    setCantidadManual(getStockActual(repuesto).toString());
   };
 
-  const repuestosFiltrados = REPUESTOS_MOCK.filter((rep) => {
-    const matchesCategory = selectedCategory === 'Todos' || rep.categoria === selectedCategory;
-    const matchesSearch =
-      rep.nombre.toLowerCase().includes(search.toLowerCase()) ||
-      rep.codigoOEM.toLowerCase().includes(search.toLowerCase()) ||
-      rep.compatibilidad.toLowerCase().includes(search.toLowerCase());
-    return matchesCategory && matchesSearch;
-  });
+  const guardarIngresoManual = async () => {
+    if (!itemEditando) return;
+    const num = parseInt(cantidadManual, 10);
+    if (!isNaN(num) && num >= 0) {
+      await StorageService.setStockItem(itemEditando.id, num);
+      setStockOverrides((prev) => ({ ...prev, [itemEditando.id]: num }));
+    }
+    setItemEditando(null);
+  };
+
+  const repuestosFiltrados = useMemo(() => {
+    const q = normalizarTexto(debouncedSearch);
+    return REPUESTOS_MOCK.filter((rep) => {
+      const stock = getStockActual(rep);
+      const matchesCategory =
+        selectedCategory === 'Todos'
+          ? true
+          : selectedCategory === 'Críticos'
+            ? stock <= UMBRAL_STOCK_CRITICO
+            : rep.categoria === selectedCategory;
+
+      if (!matchesCategory) return false;
+      if (!q) return true;
+
+      return (
+        normalizarTexto(rep.nombre).includes(q) ||
+        normalizarTexto(rep.codigoOEM).includes(q) ||
+        normalizarTexto(rep.compatibilidad).includes(q)
+      );
+    });
+  }, [debouncedSearch, getStockActual, selectedCategory]);
+
+  const totalCriticos = useMemo(
+    () => REPUESTOS_MOCK.filter((r) => getStockActual(r) <= UMBRAL_STOCK_CRITICO).length,
+    [getStockActual]
+  );
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -110,52 +136,101 @@ export const WarehouseStockScreen: React.FC<Props> = ({ navigation }) => {
         )}
       </View>
 
-      {/* Selector de categorías */}
-      <View style={styles.categoryPillsRow}>
-        {(['Todos', 'Frenos', 'Suspensión', 'Motor', 'Filtros', 'Accesorios'] as CategoriaRepuesto[]).map((cat) => (
-          <TouchableOpacity
-            key={cat}
-            style={[styles.pill, selectedCategory === cat && styles.pillActive]}
-            onPress={() => setSelectedCategory(cat)}
-          >
-            <Text style={[styles.pillText, selectedCategory === cat && styles.pillTextActive]}>
-              {cat}
-            </Text>
-          </TouchableOpacity>
-        ))}
+      {/* Selector de categorías + filtro de Stock Crítico */}
+      <View style={{ paddingVertical: 8 }}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.categoryPillsRow}
+        >
+          {(
+            ['Todos', 'Críticos', 'Frenos', 'Suspensión', 'Motor', 'Filtros', 'Accesorios'] as FiltroKardex[]
+          ).map((cat) => {
+            const active = selectedCategory === cat;
+            const esCritico = cat === 'Críticos';
+            return (
+              <TouchableOpacity
+                key={cat}
+                style={[
+                  styles.pill,
+                  active && (esCritico ? styles.pillCriticoActive : styles.pillActive),
+                ]}
+                onPress={() => setSelectedCategory(cat)}
+              >
+                {esCritico && (
+                  <Ionicons
+                    name="alert-circle-outline"
+                    size={13}
+                    color={active ? '#FFFFFF' : '#DC2626'}
+                    style={{ marginRight: 4 }}
+                  />
+                )}
+                <Text
+                  style={[
+                    styles.pillText,
+                    active && styles.pillTextActive,
+                    !active && esCritico && { color: '#DC2626' },
+                  ]}
+                >
+                  {esCritico ? `Críticos (${totalCriticos})` : cat}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
       </View>
 
-      {/* Lista de Repuestos con Control de Stock (+ / -) */}
+      {/* Lista de Repuestos con Control de Stock */}
       <FlatList
         data={repuestosFiltrados}
         keyExtractor={(item) => item.id}
+        initialNumToRender={10}
+        maxToRenderPerBatch={10}
+        windowSize={5}
         renderItem={({ item, index }) => {
           const stock = getStockActual(item);
-          const pocoStock = stock <= 3;
+          const pocoStock = stock <= UMBRAL_STOCK_CRITICO;
           const anaquel = `Anaquel ${String.fromCharCode(65 + (index % 4))}-${(index % 8) + 1}`;
 
           return (
             <View style={styles.stockCard}>
-              <Image source={{ uri: item.imagenUri }} style={styles.itemImg} resizeMode="contain" />
+              <ProductImage uri={item.imagenUri} style={styles.itemImg} resizeMode="contain" />
 
               <View style={styles.itemInfo}>
-                <Text style={styles.itemNombre} numberOfLines={1}>{item.nombre}</Text>
+                <Text style={styles.itemNombre} numberOfLines={1}>
+                  {item.nombre}
+                </Text>
                 <Text style={styles.itemOEM}>OEM: {item.codigoOEM}</Text>
                 <View style={styles.locationRow}>
                   <Ionicons name="location-outline" size={12} color="#0066FF" />
                   <Text style={styles.locationText}>{anaquel}</Text>
                   <Text style={styles.dot}>•</Text>
-                  <Text style={styles.compatText} numberOfLines={1}>{item.compatibilidad}</Text>
+                  <Text style={styles.compatText} numberOfLines={1}>
+                    {item.compatibilidad}
+                  </Text>
                 </View>
               </View>
 
-              {/* Controles de Entrada y Salida de Stock */}
               <View style={styles.stockControlBox}>
-                <View style={[styles.stockPill, pocoStock ? styles.stockPillAlert : styles.stockPillOk]}>
-                  <Text style={[styles.stockPillText, pocoStock ? styles.stockTextAlert : styles.stockTextOk]}>
+                <TouchableOpacity
+                  style={[styles.stockPill, pocoStock ? styles.stockPillAlert : styles.stockPillOk]}
+                  onPress={() => abrirModalIngresoManual(item)}
+                  activeOpacity={0.75}
+                >
+                  <Text
+                    style={[
+                      styles.stockPillText,
+                      pocoStock ? styles.stockTextAlert : styles.stockTextOk,
+                    ]}
+                  >
                     {stock} unid.
                   </Text>
-                </View>
+                  <Ionicons
+                    name="create-outline"
+                    size={11}
+                    color={pocoStock ? '#DC2626' : '#16A34A'}
+                  />
+                </TouchableOpacity>
 
                 <View style={styles.btnQtyRow}>
                   <TouchableOpacity
@@ -178,9 +253,45 @@ export const WarehouseStockScreen: React.FC<Props> = ({ navigation }) => {
             </View>
           );
         }}
-        contentContainerStyle={{ padding: 16, paddingBottom: 24 }}
+        contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 24 }}
         showsVerticalScrollIndicator={false}
       />
+
+      {/* Modal de Ajuste Físico de Kardex */}
+      <Modal visible={!!itemEditando} animationType="fade" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Ajuste Físico de Kardex</Text>
+            <Text style={styles.modalSub}>{itemEditando?.nombre}</Text>
+            <Text style={styles.modalOem}>OEM: {itemEditando?.codigoOEM}</Text>
+
+            <Text style={styles.modalLabel}>Nueva cantidad física en anaquel:</Text>
+            <TextInput
+              style={styles.modalInput}
+              value={cantidadManual}
+              onChangeText={(t) => setCantidadManual(soloDigitos(t).slice(0, 4))}
+              keyboardType="numeric"
+              maxLength={4}
+              placeholder="Ej. 25"
+            />
+
+            <View style={styles.modalBtnRow}>
+              <TouchableOpacity
+                style={styles.modalCancelBtn}
+                onPress={() => setItemEditando(null)}
+              >
+                <Text style={styles.modalCancelText}>Cancelar</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.modalSaveBtn}
+                onPress={guardarIngresoManual}
+              >
+                <Text style={styles.modalSaveText}>Actualizar Stock</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -243,12 +354,12 @@ const styles = StyleSheet.create({
   categoryPillsRow: {
     flexDirection: 'row',
     paddingHorizontal: 16,
-    marginTop: 10,
-    marginBottom: 6,
     gap: 6,
   },
   pill: {
-    paddingHorizontal: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 11,
     paddingVertical: 6,
     borderRadius: 8,
     backgroundColor: '#FFFFFF',
@@ -258,6 +369,10 @@ const styles = StyleSheet.create({
   pillActive: {
     backgroundColor: '#0066FF',
     borderColor: '#0066FF',
+  },
+  pillCriticoActive: {
+    backgroundColor: '#DC2626',
+    borderColor: '#DC2626',
   },
   pillText: {
     fontSize: 11.5,
@@ -322,11 +437,14 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   stockPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 6,
-    minWidth: 54,
-    alignItems: 'center',
+    minWidth: 66,
   },
   stockPillOk: {
     backgroundColor: '#DCFCE7',
@@ -374,6 +492,81 @@ const styles = StyleSheet.create({
   qtyBtnPlusText: {
     fontSize: 15,
     fontWeight: '800',
+    color: '#FFFFFF',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.65)',
+    justifyContent: 'center',
+    padding: 24,
+  },
+  modalCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 18,
+    padding: 20,
+  },
+  modalTitle: {
+    fontSize: 17,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  modalSub: {
+    fontSize: 13.5,
+    fontWeight: '700',
+    color: '#334155',
+    marginTop: 4,
+  },
+  modalOem: {
+    fontSize: 12,
+    color: '#64748B',
+    marginBottom: 14,
+  },
+  modalLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#475569',
+    marginBottom: 6,
+  },
+  modalInput: {
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1.5,
+    borderColor: '#CBD5E1',
+    borderRadius: 10,
+    height: 46,
+    paddingHorizontal: 14,
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#0F172A',
+    marginBottom: 16,
+  },
+  modalBtnRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  modalCancelBtn: {
+    flex: 1,
+    height: 44,
+    borderRadius: 10,
+    backgroundColor: '#F1F5F9',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalCancelText: {
+    fontSize: 13.5,
+    fontWeight: '700',
+    color: '#475569',
+  },
+  modalSaveBtn: {
+    flex: 1,
+    height: 44,
+    borderRadius: 10,
+    backgroundColor: '#0066FF',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalSaveText: {
+    fontSize: 13.5,
+    fontWeight: '700',
     color: '#FFFFFF',
   },
 });
