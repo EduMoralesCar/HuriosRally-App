@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   View,
   Text,
@@ -8,6 +8,7 @@ import {
   Modal,
   ScrollView,
   Linking,
+  RefreshControl,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -18,82 +19,166 @@ import { REPUESTOS_MOCK } from '../data/repuestos.mock';
 import { CategoriaRepuesto, Repuesto, PedidoLocal, Usuario } from '../types';
 import { StorageService } from '../services/StorageService';
 import { useCart } from '../context/CartContext';
+import { useDebouncedValue } from '../hooks/useDebouncedValue';
+import { normalizarTexto } from '../utils/catalog';
+import { filtrarPedidosPorUsuario } from '../utils/orders';
 
 interface Props {
   navigation: any;
   onLogout?: () => void;
 }
 
+type OrdenCatalogo = 'relevancia' | 'precio_asc' | 'precio_desc' | 'rating';
+
+const OPCIONES_ORDEN: { id: OrdenCatalogo; label: string; icon: keyof typeof Ionicons.glyphMap }[] = [
+  { id: 'relevancia', label: 'Destacados', icon: 'sparkles-outline' },
+  { id: 'precio_asc', label: 'Menor precio', icon: 'arrow-down-outline' },
+  { id: 'precio_desc', label: 'Mayor precio', icon: 'arrow-up-outline' },
+  { id: 'rating', label: 'Mejor valorados', icon: 'star-outline' },
+];
+
 export const CatalogScreen: React.FC<Props> = ({ navigation, onLogout }) => {
   const [currentUser, setCurrentUser] = useState<Usuario | null>(null);
   const [search, setSearch] = useState('');
+  const debouncedSearch = useDebouncedValue(search, 180);
   const [category, setCategory] = useState<CategoriaRepuesto>('Todos');
+  const [orden, setOrden] = useState<OrdenCatalogo>('relevancia');
   const [favoritosIds, setFavoritosIds] = useState<string[]>([]);
+  const [stockOverrides, setStockOverrides] = useState<Record<string, number>>({});
+  const [refreshing, setRefreshing] = useState(false);
+  const [toastMsg, setToastMsg] = useState<string | null>(null);
+
   const [showMenuModal, setShowMenuModal] = useState<boolean>(false);
   const [showContactModal, setShowContactModal] = useState<boolean>(false);
   const [showLocationModal, setShowLocationModal] = useState<boolean>(false);
   const [showLogoutModal, setShowLogoutModal] = useState<boolean>(false);
   const [showHistorialModal, setShowHistorialModal] = useState<boolean>(false);
   const [historialPedidos, setHistorialPedidos] = useState<PedidoLocal[]>([]);
-  const { totalCount } = useCart();
+
+  const { totalCount, addToCart } = useCart();
+
+  const sincronizarDatos = useCallback(async () => {
+    const [sesion, favs, pedidos, overrides] = await Promise.all([
+      StorageService.getSesion(),
+      StorageService.getFavoritos(),
+      StorageService.getHistorialPedidos(),
+      StorageService.getStockOverrides(),
+    ]);
+    if (sesion) setCurrentUser(sesion);
+    setFavoritosIds(favs.map((f) => f.id));
+    setHistorialPedidos(pedidos);
+    setStockOverrides(overrides);
+  }, []);
 
   useEffect(() => {
-    cargarSesion();
-    cargarFavoritos();
-    cargarHistorial();
+    sincronizarDatos();
     const unsubscribe = navigation.addListener('focus', () => {
-      cargarSesion();
-      cargarFavoritos();
-      cargarHistorial();
+      sincronizarDatos();
     });
     return unsubscribe;
-  }, [navigation]);
+  }, [navigation, sincronizarDatos]);
 
-  const cargarSesion = async () => {
-    const sesion = await StorageService.getSesion();
-    if (sesion) {
-      setCurrentUser(sesion);
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await sincronizarDatos();
+    setRefreshing(false);
+  }, [sincronizarDatos]);
+
+  const mostrarToast = useCallback((texto: string) => {
+    setToastMsg(texto);
+    setTimeout(() => {
+      setToastMsg(null);
+    }, 2200);
+  }, []);
+
+  const handleToggleFavorite = useCallback(
+    async (repuesto: Repuesto) => {
+      let favs = await StorageService.getFavoritos();
+      const yaExiste = favs.some((f) => f.id === repuesto.id);
+
+      if (yaExiste) {
+        favs = favs.filter((f) => f.id !== repuesto.id);
+        mostrarToast('Eliminado de guardados');
+      } else {
+        favs.push(repuesto);
+        mostrarToast(`${repuesto.nombre} guardado en favoritos`);
+      }
+
+      await StorageService.saveFavoritos(favs);
+      setFavoritosIds(favs.map((f) => f.id));
+    },
+    [mostrarToast]
+  );
+
+  const handleQuickAdd = useCallback(
+    async (repuesto: Repuesto) => {
+      await addToCart(repuesto, 1);
+      mostrarToast(`${repuesto.nombre} agregado a la pre-orden`);
+    },
+    [addToCart, mostrarToast]
+  );
+
+  const repuestosFiltrados = useMemo(() => {
+    const query = normalizarTexto(debouncedSearch);
+    const filtrados = REPUESTOS_MOCK.filter((rep) => {
+      const matchesCategory = category === 'Todos' || rep.categoria === category;
+      if (!matchesCategory) return false;
+      if (!query) return true;
+      return (
+        normalizarTexto(rep.nombre).includes(query) ||
+        normalizarTexto(rep.codigoOEM).includes(query) ||
+        normalizarTexto(rep.compatibilidad).includes(query) ||
+        normalizarTexto(rep.categoria).includes(query)
+      );
+    });
+
+    if (orden === 'precio_asc') {
+      return [...filtrados].sort((a, b) => a.precio - b.precio);
     }
-  };
-
-  const cargarHistorial = async () => {
-    const pedidos = await StorageService.getHistorialPedidos();
-    setHistorialPedidos(pedidos);
-  };
-
-  const cargarFavoritos = async () => {
-    const favs = await StorageService.getFavoritos();
-    setFavoritosIds(favs.map((f) => f.id));
-  };
-
-  const handleToggleFavorite = async (repuesto: Repuesto) => {
-    let favs = await StorageService.getFavoritos();
-    const yaExiste = favs.some((f) => f.id === repuesto.id);
-
-    if (yaExiste) {
-      favs = favs.filter((f) => f.id !== repuesto.id);
-    } else {
-      favs.push(repuesto);
+    if (orden === 'precio_desc') {
+      return [...filtrados].sort((a, b) => b.precio - a.precio);
     }
+    if (orden === 'rating') {
+      return [...filtrados].sort((a, b) => (b.rating || 4.8) - (a.rating || 4.8));
+    }
+    return filtrados;
+  }, [category, debouncedSearch, orden]);
 
-    await StorageService.saveFavoritos(favs);
-    setFavoritosIds(favs.map((f) => f.id));
-  };
+  const pedidosVisibles = useMemo(
+    () => filtrarPedidosPorUsuario(historialPedidos, currentUser),
+    [historialPedidos, currentUser]
+  );
 
-  const repuestosFiltrados = REPUESTOS_MOCK.filter((rep) => {
-    const matchesCategory = category === 'Todos' || rep.categoria === category;
-    const matchesSearch =
-      rep.nombre.toLowerCase().includes(search.toLowerCase()) ||
-      rep.codigoOEM.toLowerCase().includes(search.toLowerCase()) ||
-      rep.compatibilidad.toLowerCase().includes(search.toLowerCase());
-    return matchesCategory && matchesSearch;
-  });
+  const renderItem = useCallback(
+    ({ item }: { item: Repuesto }) => {
+      const stockActual = stockOverrides[item.id] !== undefined ? stockOverrides[item.id] : item.stock;
+      return (
+        <CardRepuesto
+          repuesto={item}
+          stock={stockActual}
+          onPress={() => navigation.navigate('Detail', { repuesto: { ...item, stock: stockActual } })}
+          isFavorite={favoritosIds.includes(item.id)}
+          onToggleFavorite={() => handleToggleFavorite(item)}
+          onAddToCart={() => handleQuickAdd(item)}
+        />
+      );
+    },
+    [favoritosIds, handleQuickAdd, handleToggleFavorite, navigation, stockOverrides]
+  );
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      {/* Header Oficial Hurios Rally (Figura A2) */}
+      {toastMsg && (
+        <View style={styles.floatingToast}>
+          <Ionicons name="checkmark-circle" size={18} color="#10B981" />
+          <Text style={styles.floatingToastText} numberOfLines={1}>
+            {toastMsg}
+          </Text>
+        </View>
+      )}
+
+      {/* Header Principal */}
       <View style={styles.header}>
-        {/* Menú Hamburguesa Funcional */}
         <TouchableOpacity
           style={styles.headerButton}
           onPress={() => setShowMenuModal(true)}
@@ -102,7 +187,6 @@ export const CatalogScreen: React.FC<Props> = ({ navigation, onLogout }) => {
           <Ionicons name="menu-outline" size={26} color="#FFFFFF" />
         </TouchableOpacity>
 
-        {/* Logo Central Hurios Rally con Bandera */}
         <View style={styles.logoCenter}>
           <View style={styles.logoTopRow}>
             <View style={styles.miniFlag}>
@@ -125,13 +209,16 @@ export const CatalogScreen: React.FC<Props> = ({ navigation, onLogout }) => {
           <Text style={styles.brandSub}>REPUESTOS AUTOMOTRICES</Text>
         </View>
 
-        {/* Carrito / Cotizador con Contador Badge Rojo */}
         <TouchableOpacity
           style={styles.headerButton}
           onPress={() => navigation.navigate('PreOrdenTab')}
           activeOpacity={0.7}
         >
-          <Ionicons name={currentUser?.rol === 'Asesor' ? 'calculator-outline' : 'cart-outline'} size={26} color="#FFFFFF" />
+          <Ionicons
+            name={currentUser?.rol === 'Asesor' ? 'calculator-outline' : 'cart-outline'}
+            size={26}
+            color="#FFFFFF"
+          />
           {totalCount > 0 && (
             <View style={styles.cartBadge}>
               <Text style={styles.cartBadgeText}>{totalCount}</Text>
@@ -140,7 +227,6 @@ export const CatalogScreen: React.FC<Props> = ({ navigation, onLogout }) => {
         </TouchableOpacity>
       </View>
 
-      {/* Barra de Modo Asesor de Ventas */}
       {currentUser?.rol === 'Asesor' && (
         <View style={styles.asesorModeBanner}>
           <Ionicons name="briefcase" size={14} color="#0066FF" />
@@ -150,32 +236,50 @@ export const CatalogScreen: React.FC<Props> = ({ navigation, onLogout }) => {
         </View>
       )}
 
-      {/* Buscador de repuestos */}
       <SearchBar
         value={search}
         onChangeText={setSearch}
         onFilterPress={() => navigation.navigate('CategoriasTab')}
       />
 
-      {/* Selector Horizontal de Categorías con Contador Integrado */}
-      <CategoryPills
-        selected={category}
-        onSelect={setCategory}
-        count={repuestosFiltrados.length}
-      />
+      <CategoryPills selected={category} onSelect={setCategory} count={repuestosFiltrados.length} />
 
-      {/* Lista Dinámica de Repuestos */}
+      <View style={styles.sortBarWrapper}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.sortContainer}
+        >
+          {OPCIONES_ORDEN.map((opt) => {
+            const active = orden === opt.id;
+            return (
+              <TouchableOpacity
+                key={opt.id}
+                style={[styles.sortChip, active && styles.sortChipActive]}
+                onPress={() => setOrden(opt.id)}
+                activeOpacity={0.75}
+              >
+                <Ionicons name={opt.icon} size={12} color={active ? '#0066FF' : '#64748B'} />
+                <Text style={[styles.sortChipText, active && styles.sortChipTextActive]}>
+                  {opt.label}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
+      </View>
+
       <FlatList
         data={repuestosFiltrados}
         keyExtractor={(item) => item.id}
-        renderItem={({ item }) => (
-          <CardRepuesto
-            repuesto={item}
-            onPress={() => navigation.navigate('Detail', { repuesto: item })}
-            isFavorite={favoritosIds.includes(item.id)}
-            onToggleFavorite={() => handleToggleFavorite(item)}
-          />
-        )}
+        renderItem={renderItem}
+        initialNumToRender={8}
+        maxToRenderPerBatch={8}
+        windowSize={5}
+        removeClippedSubviews={true}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#EF4444']} />
+        }
         contentContainerStyle={
           repuestosFiltrados.length === 0
             ? [styles.listContent, { flexGrow: 1, justifyContent: 'center' }]
@@ -196,6 +300,7 @@ export const CatalogScreen: React.FC<Props> = ({ navigation, onLogout }) => {
               onPress={() => {
                 setSearch('');
                 setCategory('Todos');
+                setOrden('relevancia');
               }}
             >
               <Ionicons name="refresh" size={16} color="#FFFFFF" style={{ marginRight: 6 }} />
@@ -205,16 +310,15 @@ export const CatalogScreen: React.FC<Props> = ({ navigation, onLogout }) => {
         }
       />
 
-      {/* Modal / Menú Lateral Hamburguesa Completo y Funcional */}
+      {/* Menú Lateral */}
       <Modal visible={showMenuModal} animationType="slide" transparent>
         <View style={styles.drawerOverlay}>
           <View style={styles.drawerContainer}>
-            {/* Cabecera del Cajón */}
             <View style={styles.drawerHeader}>
               <View>
                 <Text style={styles.drawerBrand}>HURIOS RALLY E.I.R.L.</Text>
                 <Text style={styles.drawerRuc}>RUC: 20608542191</Text>
-                <Text style={styles.drawerSede}>📍 Sede San Martín de Porres</Text>
+                <Text style={styles.drawerSede}>Sede San Martín de Porres</Text>
               </View>
               <TouchableOpacity onPress={() => setShowMenuModal(false)} style={styles.drawerClose}>
                 <Ionicons name="close" size={24} color="#FFFFFF" />
@@ -250,7 +354,11 @@ export const CatalogScreen: React.FC<Props> = ({ navigation, onLogout }) => {
                   navigation.navigate('FavoritosTab');
                 }}
               >
-                <Ionicons name={currentUser?.rol === 'Asesor' ? 'star-outline' : 'heart-outline'} size={20} color="#EF4444" />
+                <Ionicons
+                  name={currentUser?.rol === 'Asesor' ? 'star-outline' : 'heart-outline'}
+                  size={20}
+                  color="#EF4444"
+                />
                 <Text style={styles.drawerItemText}>
                   {currentUser?.rol === 'Asesor' ? 'Repuestos de Alta Rotación' : 'Mis Repuestos Guardados'}
                 </Text>
@@ -258,15 +366,17 @@ export const CatalogScreen: React.FC<Props> = ({ navigation, onLogout }) => {
 
               <TouchableOpacity
                 style={styles.drawerItem}
-                onPress={() => {
+                onPress={async () => {
                   setShowMenuModal(false);
-                  cargarHistorial();
+                  await sincronizarDatos();
                   setShowHistorialModal(true);
                 }}
               >
                 <Ionicons name="receipt-outline" size={20} color="#10B981" />
                 <Text style={styles.drawerItemText}>
-                  {currentUser?.rol === 'Asesor' ? 'Historial de Cotizaciones y Ventas' : 'Mis Pedidos y Compras'}
+                  {currentUser?.rol === 'Asesor'
+                    ? 'Historial de Cotizaciones y Ventas'
+                    : 'Mis Pedidos y Compras'}
                 </Text>
               </TouchableOpacity>
 
@@ -328,14 +438,14 @@ export const CatalogScreen: React.FC<Props> = ({ navigation, onLogout }) => {
             </ScrollView>
 
             <View style={styles.drawerFooter}>
-              <Text style={styles.footerNote}>Sistema Móvil para Gestión de Inventario</Text>
-              <Text style={styles.footerVersion}>Versión 2.0.0 - UTP 2026</Text>
+              <Text style={styles.footerNote}>Sistema Móvil de Repuestos e Inventario</Text>
+              <Text style={styles.footerVersion}>Hurios Rally E.I.R.L. • v2.0.0</Text>
             </View>
           </View>
         </View>
       </Modal>
 
-      {/* Modal Confirmación de Cierre de Sesión desde Drawer */}
+      {/* Modal Confirmación de Cierre de Sesión */}
       <Modal visible={showLogoutModal} animationType="fade" transparent>
         <View style={styles.popupBg}>
           <View style={styles.logoutCard}>
@@ -375,7 +485,7 @@ export const CatalogScreen: React.FC<Props> = ({ navigation, onLogout }) => {
         </View>
       </Modal>
 
-      {/* Modal Profesional: Atención y Contacto Mostrador */}
+      {/* Modal Atención y Contacto */}
       <Modal visible={showContactModal} animationType="fade" transparent>
         <View style={styles.popupBg}>
           <View style={styles.popupCard}>
@@ -446,7 +556,7 @@ export const CatalogScreen: React.FC<Props> = ({ navigation, onLogout }) => {
         </View>
       </Modal>
 
-      {/* Modal Profesional: Ubicación y Horarios de Almacén */}
+      {/* Modal Ubicación y Horarios */}
       <Modal visible={showLocationModal} animationType="fade" transparent>
         <View style={styles.popupBg}>
           <View style={styles.popupCard}>
@@ -468,7 +578,9 @@ export const CatalogScreen: React.FC<Props> = ({ navigation, onLogout }) => {
                 <Ionicons name="business" size={20} color="#0066FF" />
                 <View style={{ flex: 1, marginLeft: 12 }}>
                   <Text style={styles.infoRowTitle}>Dirección Principal:</Text>
-                  <Text style={styles.infoRowDesc}>Av. Perú 2450, San Martín de Porres, Lima Norte (Cerca al óvalo Habich).</Text>
+                  <Text style={styles.infoRowDesc}>
+                    Av. Perú 2450, San Martín de Porres, Lima Norte (Cerca al óvalo Habich).
+                  </Text>
                 </View>
               </View>
 
@@ -476,7 +588,9 @@ export const CatalogScreen: React.FC<Props> = ({ navigation, onLogout }) => {
                 <Ionicons name="time" size={20} color="#10B981" />
                 <View style={{ flex: 1, marginLeft: 12 }}>
                   <Text style={styles.infoRowTitle}>Horario de Despacho:</Text>
-                  <Text style={styles.infoRowDesc}>Lunes a Viernes: 8:00 AM - 6:30 PM{'\n'}Sábados: 8:00 AM - 2:00 PM</Text>
+                  <Text style={styles.infoRowDesc}>
+                    Lunes a Viernes: 8:00 AM - 6:30 PM{'\n'}Sábados: 8:00 AM - 2:00 PM
+                  </Text>
                 </View>
               </View>
 
@@ -484,7 +598,9 @@ export const CatalogScreen: React.FC<Props> = ({ navigation, onLogout }) => {
                 <Ionicons name="shield-checkmark" size={20} color="#F59E0B" />
                 <View style={{ flex: 1, marginLeft: 12 }}>
                   <Text style={styles.infoRowTitle}>Seguridad y Entrega:</Text>
-                  <Text style={styles.infoRowDesc}>Retiro en mostrador con código de cotización o envío coordinado a taller.</Text>
+                  <Text style={styles.infoRowDesc}>
+                    Retiro en mostrador con código de cotización o envío coordinado a taller.
+                  </Text>
                 </View>
               </View>
             </View>
@@ -499,7 +615,7 @@ export const CatalogScreen: React.FC<Props> = ({ navigation, onLogout }) => {
         </View>
       </Modal>
 
-      {/* Modal Profesional: Historial de Pedidos y Compras */}
+      {/* Modal Historial de Pedidos y Compras */}
       <Modal visible={showHistorialModal} animationType="slide" transparent>
         <View style={styles.popupBg}>
           <View style={[styles.popupCard, { maxHeight: '88%' }]}>
@@ -508,15 +624,19 @@ export const CatalogScreen: React.FC<Props> = ({ navigation, onLogout }) => {
                 <Ionicons name="receipt" size={24} color="#10B981" />
               </View>
               <View style={{ flex: 1, marginLeft: 12 }}>
-                <Text style={styles.popupTitle}>Mis Pedidos y Compras</Text>
-                <Text style={styles.popupSubtitle}>Registro de compras y cotizaciones</Text>
+                <Text style={styles.popupTitle}>
+                  {currentUser?.rol === 'Asesor' ? 'Cotizaciones Emitidas' : 'Mis Pedidos y Compras'}
+                </Text>
+                <Text style={styles.popupSubtitle}>
+                  {pedidosVisibles.length} registro(s) asociado(s) a tu cuenta
+                </Text>
               </View>
               <TouchableOpacity onPress={() => setShowHistorialModal(false)}>
                 <Ionicons name="close" size={22} color="#94A3B8" />
               </TouchableOpacity>
             </View>
 
-            {historialPedidos.length === 0 ? (
+            {pedidosVisibles.length === 0 ? (
               <View style={{ paddingVertical: 40, alignItems: 'center' }}>
                 <Ionicons name="receipt-outline" size={48} color="#CBD5E1" />
                 <Text style={{ fontSize: 15, fontWeight: '700', color: '#64748B', marginTop: 10 }}>
@@ -528,17 +648,20 @@ export const CatalogScreen: React.FC<Props> = ({ navigation, onLogout }) => {
               </View>
             ) : (
               <ScrollView showsVerticalScrollIndicator={false} style={{ marginVertical: 10 }}>
-                {historialPedidos.map((ped, index) => (
+                {pedidosVisibles.map((ped, index) => (
                   <View key={ped.id || index} style={styles.orderHistoryCard}>
                     <View style={styles.orderHistoryHeader}>
                       <View>
                         <Text style={styles.orderCode}>{ped.id}</Text>
-                        <Text style={styles.orderDate}>📅 {ped.fechaCreacion}</Text>
+                        <Text style={styles.orderDate}>
+                          {ped.fechaCreacion}
+                          {ped.clienteNombre ? ` • ${ped.clienteNombre}` : ''}
+                        </Text>
                       </View>
                       <View
                         style={[
                           styles.orderBadge,
-                          ped.estado === 'Pagado'
+                          ped.estado === 'Entregado' || ped.estado === 'Pagado'
                             ? styles.orderBadgePaid
                             : styles.orderBadgePending,
                         ]}
@@ -546,7 +669,7 @@ export const CatalogScreen: React.FC<Props> = ({ navigation, onLogout }) => {
                         <Text
                           style={[
                             styles.orderBadgeText,
-                            ped.estado === 'Pagado'
+                            ped.estado === 'Entregado' || ped.estado === 'Pagado'
                               ? styles.orderBadgePaidText
                               : styles.orderBadgePendingText,
                           ]}
@@ -565,11 +688,17 @@ export const CatalogScreen: React.FC<Props> = ({ navigation, onLogout }) => {
                     </View>
 
                     <View style={styles.orderHistoryFooter}>
-                      <Text style={styles.orderPayMethod}>
-                        💳 {ped.metodoPago || 'Contraentrega SMP'}
-                      </Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                        <Ionicons name="card-outline" size={13} color="#64748B" />
+                        <Text style={styles.orderPayMethod}>
+                          {ped.metodoPago || 'Contraentrega SMP'}
+                        </Text>
+                      </View>
                       <Text style={styles.orderTotal}>
-                        Total: <Text style={{ color: '#0066FF', fontWeight: '900' }}>S/ {ped.totalCotizado.toFixed(2)}</Text>
+                        Total:{' '}
+                        <Text style={{ color: '#0066FF', fontWeight: '900' }}>
+                          S/ {ped.totalCotizado.toFixed(2)}
+                        </Text>
                       </Text>
                     </View>
                   </View>
@@ -594,6 +723,30 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#F8FAFC',
+  },
+  floatingToast: {
+    position: 'absolute',
+    bottom: 20,
+    left: 20,
+    right: 20,
+    backgroundColor: '#0F172A',
+    borderRadius: 12,
+    paddingVertical: 11,
+    paddingHorizontal: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    zIndex: 999,
+    elevation: 6,
+    shadowColor: '#000',
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+  },
+  floatingToastText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '700',
+    flex: 1,
   },
   header: {
     backgroundColor: '#0F172A',
@@ -660,16 +813,36 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '800',
   },
-  countBar: {
-    paddingHorizontal: 18,
-    paddingTop: 2,
-    paddingBottom: 2,
-    marginTop: 0,
-    marginBottom: 2,
+  sortBarWrapper: {
+    paddingVertical: 4,
   },
-  countText: {
-    fontSize: 12,
+  sortContainer: {
+    paddingHorizontal: 16,
+    gap: 8,
+  },
+  sortChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 14,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  sortChipActive: {
+    backgroundColor: '#EFF6FF',
+    borderColor: '#93C5FD',
+  },
+  sortChipText: {
+    fontSize: 11.5,
     color: '#64748B',
+    fontWeight: '600',
+  },
+  sortChipTextActive: {
+    color: '#0066FF',
+    fontWeight: '700',
   },
   listContent: {
     paddingTop: 2,
@@ -753,7 +926,6 @@ const styles = StyleSheet.create({
     color: '#94A3B8',
     marginTop: 2,
   },
-  // Estilos de los modales de contacto y ubicación
   popupBg: {
     flex: 1,
     backgroundColor: 'rgba(15, 23, 42, 0.65)',
@@ -856,7 +1028,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
   },
-  // Estilos del modal de cerrar sesión en Drawer
   logoutCard: {
     width: '100%',
     backgroundColor: '#FFFFFF',
@@ -923,7 +1094,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#FFFFFF',
   },
-  // Estado vacío de búsqueda
   emptyContainer: {
     alignItems: 'center',
     justifyContent: 'center',
@@ -966,7 +1136,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '700',
   },
-  // Estilos del historial de pedidos
   orderHistoryCard: {
     backgroundColor: '#FFFFFF',
     borderRadius: 14,

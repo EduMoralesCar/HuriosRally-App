@@ -21,6 +21,11 @@ interface Props {
   onLoginSuccess: () => void;
 }
 
+const REG_SEDES = [
+  { id: '1', nombre: 'Lima Norte / SMP (Sede Central)', direccion: 'Av. Perú 2450, San Martín de Porres' },
+  { id: '2', nombre: 'Almacén Central / Despacho SMP', direccion: 'Jr. Huancayo 312, SMP' },
+];
+
 export const LoginScreen: React.FC<Props> = ({ onLoginSuccess }) => {
   const [username, setUsername] = useState('carlos_mendoza');
   const [password, setPassword] = useState('Hurios@2026');
@@ -28,12 +33,11 @@ export const LoginScreen: React.FC<Props> = ({ onLoginSuccess }) => {
   const [rememberSession, setRememberSession] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
 
-  // Modales de Autenticación Requeridos por el APF2
   const [showRegisterModal, setShowRegisterModal] = useState(false);
   const [showForgotModal, setShowForgotModal] = useState(false);
   const [showUpdatePassModal, setShowUpdatePassModal] = useState(false);
 
-  // Estados Formulario de Registro de Usuario
+  // Registro de usuario
   const [regNombre, setRegNombre] = useState('');
   const [regUser, setRegUser] = useState('');
   const [regEmail, setRegEmail] = useState('');
@@ -43,8 +47,8 @@ export const LoginScreen: React.FC<Props> = ({ onLoginSuccess }) => {
   const [regSede, setRegSede] = useState('Lima Norte / SMP (Sede Central)');
   const [showRegSedeDropdown, setShowRegSedeDropdown] = useState(false);
 
-  // Estados Formulario de Recuperación en 3 Pasos
-  const [forgotStep, setForgotStep] = useState<1 | 2 | 3>(1); // 1: Solicitar, 2: Código, 3: Nueva Clave
+  // Recuperación en 3 pasos
+  const [forgotStep, setForgotStep] = useState<1 | 2 | 3>(1);
   const [forgotInput, setForgotInput] = useState('');
   const [forgotTargetEmail, setForgotTargetEmail] = useState('');
   const [forgotTargetUsername, setForgotTargetUsername] = useState('');
@@ -54,12 +58,12 @@ export const LoginScreen: React.FC<Props> = ({ onLoginSuccess }) => {
   const [confirmResetPassword, setConfirmResetPassword] = useState('');
   const [isSendingCode, setIsSendingCode] = useState(false);
 
-  // Estados Formulario de Actualización de Contraseña
+  // Actualización de contraseña
   const [updateUser, setUpdateUser] = useState('');
   const [updateCurrentPass, setUpdateCurrentPass] = useState('');
   const [updateNewPass, setUpdateNewPass] = useState('');
 
-  // Diálogo / Feedback Modal Personalizado
+  // Diálogo de notificación
   const [dialog, setDialog] = useState<{
     visible: boolean;
     titulo: string;
@@ -69,7 +73,6 @@ export const LoginScreen: React.FC<Props> = ({ onLoginSuccess }) => {
     onAceptar?: () => void;
   } | null>(null);
 
-  // Modal para confirmar Autenticación Biométrica
   const [showBioModal, setShowBioModal] = useState(false);
 
   const mostrarMensaje = (
@@ -99,7 +102,6 @@ export const LoginScreen: React.FC<Props> = ({ onLoginSuccess }) => {
     }
   };
 
-  // 1. Login con credenciales y gestión de sesión (token en AsyncStorage)
   const handleLogin = async () => {
     if (!username.trim() || !password.trim()) {
       mostrarMensaje('Campos requeridos', 'Por favor ingresa tu usuario y contraseña.', 'warning');
@@ -115,14 +117,13 @@ export const LoginScreen: React.FC<Props> = ({ onLoginSuccess }) => {
     } else {
       mostrarMensaje(
         'Acceso no concedido',
-        result.message || 'Credenciales incorrectas.\n\nPrueba con la cuenta demo:\nadmin_rally / 123456',
+        result.message || 'Usuario o contraseña incorrectos. Verifica tus credenciales.',
         'error'
       );
     }
   };
 
-  // 2. Autenticación Biométrica (Huella / Face ID)
-  const handleBiometricAuth = async () => {
+  const handleBiometricAuth = () => {
     setShowBioModal(true);
   };
 
@@ -138,15 +139,6 @@ export const LoginScreen: React.FC<Props> = ({ onLoginSuccess }) => {
     }
   };
 
-  // Opciones de sedes oficiales
-  const REG_SEDES = [
-    { id: '1', nombre: 'Lima Norte / SMP (Sede Central)', direccion: 'Av. Perú 2450, San Martín de Porres' },
-    { id: '2', nombre: 'Almacén Central / Despacho SMP', direccion: 'Jr. Huancayo 312, SMP' },
-  ];
-
-  // Generador automático de usuario y correo corporativo
-  // Formato ordenado y claro: Primer Nombre + Apellido Paterno (ej. Juan Pérez Quispe -> juan_perez)
-  // Correo: juan_perez.ventas@huriosrally.com
   const generarCredencialesAuto = (nombre: string, rol: 'Asesor' | 'Almacenero' | 'Cliente') => {
     const limpio = nombre
       .toLowerCase()
@@ -164,12 +156,7 @@ export const LoginScreen: React.FC<Props> = ({ onLoginSuccess }) => {
     const primerNombre = (partes[0] || 'usuario').replace(/[^a-z0-9]/g, '');
     const apellidoPaterno = (partes[1] || '').replace(/[^a-z0-9]/g, '');
 
-    // Usuario ordenado: nombre_apellido (ej. juan_perez)
-    const userGenerado = apellidoPaterno
-      ? `${primerNombre}_${apellidoPaterno}`
-      : primerNombre;
-
-    // Correo corporativo con rol/área comercial
+    const userGenerado = apellidoPaterno ? `${primerNombre}_${apellidoPaterno}` : primerNombre;
     const rolEmailSlug = rol === 'Asesor' ? 'ventas' : rol === 'Almacenero' ? 'almacen' : 'cliente';
     const emailGenerado = `${userGenerado}.${rolEmailSlug}@huriosrally.com`;
 
@@ -187,7 +174,6 @@ export const LoginScreen: React.FC<Props> = ({ onLoginSuccess }) => {
     generarCredencialesAuto(regNombre, nuevoRol);
   };
 
-  // 3. Registro de usuario para todo tipo de usuarios
   const handleRegister = async () => {
     if (!regNombre.trim() || !regPass.trim()) {
       mostrarMensaje('Validación', 'Por favor ingresa tu nombre completo y contraseña.', 'warning');
@@ -231,7 +217,7 @@ export const LoginScreen: React.FC<Props> = ({ onLoginSuccess }) => {
       setShowRegSedeDropdown(false);
       mostrarMensaje(
         'Registro Exitoso',
-        `Usuario corporativo creado automáticamente:\n\n👤 Usuario: ${regUser}\n✉ Correo: ${regEmail}\n🏢 Sede: ${regSede}\n💼 Rol: ${regRol}\n\nYa puedes iniciar sesión con tus credenciales.`,
+        `Cuenta creada correctamente:\n\n• Usuario: ${regUser}\n• Correo: ${regEmail}\n• Sede: ${regSede}\n• Rol: ${regRol}\n\nYa puedes iniciar sesión con tus credenciales.`,
         'success'
       );
     } else {
@@ -239,8 +225,6 @@ export const LoginScreen: React.FC<Props> = ({ onLoginSuccess }) => {
     }
   };
 
-  // 4. Recuperación de contraseña: Flujo 3 Pasos
-  // Paso 1: Enviar código al correo (vía servidor SMTP Gmail)
   const handleSolicitarCodigo = async () => {
     const emailLimpio = forgotInput.trim().toLowerCase();
     if (!emailLimpio) {
@@ -272,7 +256,6 @@ export const LoginScreen: React.FC<Props> = ({ onLoginSuccess }) => {
     }
   };
 
-  // Paso 2: Verificar el código de 6 dígitos
   const handleVerificarCodigo = async () => {
     if (!verificationCodeInput.trim() || verificationCodeInput.trim().length !== 6) {
       mostrarMensaje('Código Inválido', 'Por favor ingresa los 6 dígitos del código de verificación.', 'warning');
@@ -294,7 +277,6 @@ export const LoginScreen: React.FC<Props> = ({ onLoginSuccess }) => {
     }
   };
 
-  // Paso 3: Guardar la nueva contraseña
   const handleGuardarNuevaPassword = async () => {
     if (!newResetPassword.trim() || !confirmResetPassword.trim()) {
       mostrarMensaje('Campos requeridos', 'Por favor ingresa y confirma tu nueva contraseña.', 'warning');
@@ -318,12 +300,10 @@ export const LoginScreen: React.FC<Props> = ({ onLoginSuccess }) => {
 
     if (res.success) {
       setShowForgotModal(false);
-      // Precargar los datos en el login para facilitar el acceso
       if (forgotTargetUsername) {
         setUsername(forgotTargetUsername);
       }
       setPassword(newResetPassword);
-      // Resetear estados
       setForgotStep(1);
       setForgotInput('');
       setVerificationCodeInput('');
@@ -331,7 +311,7 @@ export const LoginScreen: React.FC<Props> = ({ onLoginSuccess }) => {
       setConfirmResetPassword('');
 
       mostrarMensaje(
-        '¡Acceso Restablecido!',
+        'Acceso Restablecido',
         'Tu contraseña ha sido actualizada con éxito.\nPuedes ingresar ahora al sistema Hurios Rally.',
         'success'
       );
@@ -348,7 +328,6 @@ export const LoginScreen: React.FC<Props> = ({ onLoginSuccess }) => {
     setConfirmResetPassword('');
   };
 
-  // 5. Actualización de contraseña
   const handleUpdatePassword = async () => {
     if (!updateUser.trim() || !updateCurrentPass.trim() || !updateNewPass.trim()) {
       mostrarMensaje('Validación', 'Por favor completa todos los campos solicitados.', 'warning');
@@ -386,7 +365,6 @@ export const LoginScreen: React.FC<Props> = ({ onLoginSuccess }) => {
     >
       <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
 
-      {/* Mitad Superior: Fondo con Auto Deportivo y Logo Hurios Rally (Figura A1) */}
       <ImageBackground
         source={{
           uri: 'https://images.unsplash.com/photo-1617814076367-b759c7d7e738?w=900&q=80',
@@ -396,7 +374,6 @@ export const LoginScreen: React.FC<Props> = ({ onLoginSuccess }) => {
       >
         <View style={styles.heroOverlay}>
           <View style={styles.brandBlock}>
-            {/* Bandera a cuadros estilo Rally */}
             <View style={styles.rallyFlag}>
               <View style={styles.flagRow}>
                 <View style={[styles.flagTile, { backgroundColor: '#E11D48' }]} />
@@ -412,12 +389,10 @@ export const LoginScreen: React.FC<Props> = ({ onLoginSuccess }) => {
               </View>
             </View>
 
-            {/* Tipografía Oficial Hurios Rally */}
             <Text style={styles.brandHurios}>HURIOS</Text>
             <Text style={styles.brandRally}>RALLY</Text>
             <Text style={styles.brandCategory}>REPUESTOS AUTOMOTRICES</Text>
 
-            {/* Línea roja decorativa y eslogan */}
             <View style={styles.redDivider} />
             <Text style={styles.sloganLine}>Tu aliado en</Text>
             <Text style={styles.sloganLine}>cada recorrido</Text>
@@ -425,12 +400,10 @@ export const LoginScreen: React.FC<Props> = ({ onLoginSuccess }) => {
         </View>
       </ImageBackground>
 
-      {/* Mitad Inferior: Tarjeta Flotante Blanca según Propuesta Exacta */}
       <View style={styles.cardContainer}>
         <Text style={styles.title}>Iniciar sesión</Text>
         <Text style={styles.subtitle}>Ingresa tus credenciales para continuar</Text>
 
-        {/* Input Usuario */}
         <View style={styles.inputWrapper}>
           <Ionicons
             name="person-outline"
@@ -440,7 +413,7 @@ export const LoginScreen: React.FC<Props> = ({ onLoginSuccess }) => {
           />
           <TextInput
             style={styles.textInput}
-            placeholder="Usuario"
+            placeholder="Usuario o correo"
             placeholderTextColor="#94A3B8"
             value={username}
             onChangeText={setUsername}
@@ -448,7 +421,6 @@ export const LoginScreen: React.FC<Props> = ({ onLoginSuccess }) => {
           />
         </View>
 
-        {/* Input Contraseña con Ojo */}
         <View style={styles.inputWrapper}>
           <Ionicons
             name="lock-closed-outline"
@@ -477,7 +449,6 @@ export const LoginScreen: React.FC<Props> = ({ onLoginSuccess }) => {
           </TouchableOpacity>
         </View>
 
-        {/* Botón Ingresar -> */}
         <TouchableOpacity
           style={styles.loginButton}
           onPress={handleLogin}
@@ -494,7 +465,6 @@ export const LoginScreen: React.FC<Props> = ({ onLoginSuccess }) => {
           )}
         </TouchableOpacity>
 
-        {/* Fila: Recordar Sesión + Biometría */}
         <View style={styles.optionsRow}>
           <TouchableOpacity
             style={styles.rememberRow}
@@ -507,7 +477,6 @@ export const LoginScreen: React.FC<Props> = ({ onLoginSuccess }) => {
             <Text style={styles.rememberText}>Recordar sesión</Text>
           </TouchableOpacity>
 
-          {/* Botón Biometría */}
           <TouchableOpacity
             style={styles.biometricBtn}
             onPress={handleBiometricAuth}
@@ -518,11 +487,10 @@ export const LoginScreen: React.FC<Props> = ({ onLoginSuccess }) => {
           </TouchableOpacity>
         </View>
 
-        {/* Selector Rápido de Cuentas por Rol (Cliente, Asesor, Almacenero) */}
+        {/* Acceso rápido por rol */}
         <View style={styles.quickAccountsBox}>
-          <Text style={styles.quickAccountsTitle}>CUENTAS DISPONIBLES POR ROL</Text>
+          <Text style={styles.quickAccountsTitle}>PERFILES DE ACCESO RÁPIDO</Text>
           <View style={styles.quickAccountsRow}>
-            {/* 1. Cliente */}
             <TouchableOpacity
               style={[
                 styles.quickAccountBtn,
@@ -536,7 +504,7 @@ export const LoginScreen: React.FC<Props> = ({ onLoginSuccess }) => {
             >
               <Ionicons
                 name="person"
-                size={16}
+                size={15}
                 color={username === 'carlos_mendoza' ? '#FFFFFF' : '#0066FF'}
               />
               <Text
@@ -545,11 +513,10 @@ export const LoginScreen: React.FC<Props> = ({ onLoginSuccess }) => {
                   username === 'carlos_mendoza' && styles.quickAccountTextActive,
                 ]}
               >
-                1. Cliente
+                Cliente
               </Text>
             </TouchableOpacity>
 
-            {/* 2. Asesor */}
             <TouchableOpacity
               style={[
                 styles.quickAccountBtn,
@@ -563,7 +530,7 @@ export const LoginScreen: React.FC<Props> = ({ onLoginSuccess }) => {
             >
               <Ionicons
                 name="briefcase"
-                size={16}
+                size={15}
                 color={username === 'edu_morales' ? '#FFFFFF' : '#EF4444'}
               />
               <Text
@@ -572,11 +539,10 @@ export const LoginScreen: React.FC<Props> = ({ onLoginSuccess }) => {
                   username === 'edu_morales' && styles.quickAccountTextActive,
                 ]}
               >
-                2. Asesor
+                Asesor
               </Text>
             </TouchableOpacity>
 
-            {/* 3. Almacenero */}
             <TouchableOpacity
               style={[
                 styles.quickAccountBtn,
@@ -590,7 +556,7 @@ export const LoginScreen: React.FC<Props> = ({ onLoginSuccess }) => {
             >
               <Ionicons
                 name="cube"
-                size={16}
+                size={15}
                 color={username === 'raul_quispe' ? '#FFFFFF' : '#059669'}
               />
               <Text
@@ -599,13 +565,12 @@ export const LoginScreen: React.FC<Props> = ({ onLoginSuccess }) => {
                   username === 'raul_quispe' && styles.quickAccountTextActive,
                 ]}
               >
-                3. Almacén
+                Almacén
               </Text>
             </TouchableOpacity>
           </View>
         </View>
 
-        {/* Enlaces de Acción del Módulo de Autenticación */}
         <View style={styles.authLinksGroup}>
           <View style={styles.subLinksRow}>
             <TouchableOpacity onPress={() => setShowForgotModal(true)}>
@@ -626,7 +591,7 @@ export const LoginScreen: React.FC<Props> = ({ onLoginSuccess }) => {
         </View>
       </View>
 
-      {/* ================= MODAL 1: REGISTRO DE USUARIO ================= */}
+      {/* Modal de Registro */}
       <Modal visible={showRegisterModal} animationType="slide" transparent>
         <View style={styles.modalBackdrop}>
           <View style={styles.modalCard}>
@@ -652,7 +617,6 @@ export const LoginScreen: React.FC<Props> = ({ onLoginSuccess }) => {
               <Text style={styles.fieldLabel}>Teléfono de Contacto</Text>
               <View style={styles.phoneInputRow}>
                 <View style={styles.countryCodeBadge}>
-                  <Text style={styles.countryFlag}>🇵🇪</Text>
                   <Text style={styles.countryCodeText}>+51</Text>
                 </View>
                 <TextInput
@@ -731,7 +695,6 @@ export const LoginScreen: React.FC<Props> = ({ onLoginSuccess }) => {
                 </View>
               )}
 
-              {/* Tarjeta de Credenciales Autogeneradas por el Sistema */}
               <View style={styles.autoCredsCard}>
                 <View style={styles.autoCredsHeader}>
                   <Ionicons name="sparkles" size={16} color="#0066FF" />
@@ -753,7 +716,9 @@ export const LoginScreen: React.FC<Props> = ({ onLoginSuccess }) => {
                 </View>
               </View>
 
-              <Text style={styles.fieldLabel}>Contraseña (mín. 8 caracteres con mayúscula, número y símbolo) *</Text>
+              <Text style={styles.fieldLabel}>
+                Contraseña (mín. 8 caracteres con mayúscula, número y símbolo) *
+              </Text>
               <TextInput
                 style={styles.modalInput}
                 placeholder="••••••••"
@@ -770,7 +735,7 @@ export const LoginScreen: React.FC<Props> = ({ onLoginSuccess }) => {
         </View>
       </Modal>
 
-      {/* ================= MODAL 2: RECUPERACIÓN DE CONTRASEÑA EN 3 PASOS ================= */}
+      {/* Modal de Recuperación de Contraseña en 3 Pasos */}
       <Modal visible={showForgotModal} animationType="fade" transparent>
         <View style={styles.modalBackdrop}>
           <View style={styles.modalCard}>
@@ -784,7 +749,6 @@ export const LoginScreen: React.FC<Props> = ({ onLoginSuccess }) => {
               </TouchableOpacity>
             </View>
 
-            {/* Barra de Progreso de Pasos (1 - 2 - 3) */}
             <View style={styles.stepsBar}>
               <View style={[styles.stepDot, forgotStep >= 1 && styles.stepDotActive]}>
                 <Text style={[styles.stepDotText, forgotStep >= 1 && styles.stepDotTextActive]}>1</Text>
@@ -806,7 +770,6 @@ export const LoginScreen: React.FC<Props> = ({ onLoginSuccess }) => {
             </View>
 
             <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 10 }}>
-              {/* PASO 1: Ingreso de Correo Electrónico */}
               {forgotStep === 1 && (
                 <View>
                   <Text style={styles.modalHelperText}>
@@ -816,7 +779,7 @@ export const LoginScreen: React.FC<Props> = ({ onLoginSuccess }) => {
                   <Text style={styles.fieldLabel}>Correo Electrónico *</Text>
                   <TextInput
                     style={styles.modalInput}
-                    placeholder="ejemplo@correo.com"
+                    placeholder="ejemplo@huriosrally.com"
                     value={forgotInput}
                     onChangeText={setForgotInput}
                     autoCapitalize="none"
@@ -840,7 +803,6 @@ export const LoginScreen: React.FC<Props> = ({ onLoginSuccess }) => {
                 </View>
               )}
 
-              {/* PASO 2: Ingresar Código de Verificación recibido por correo */}
               {forgotStep === 2 && (
                 <View>
                   <View style={styles.emailNoticeBox}>
@@ -891,19 +853,20 @@ export const LoginScreen: React.FC<Props> = ({ onLoginSuccess }) => {
                 </View>
               )}
 
-              {/* PASO 3: Definir la Nueva Contraseña */}
               {forgotStep === 3 && (
                 <View>
                   <View style={styles.successVerifiedBox}>
                     <Ionicons name="checkmark-circle" size={24} color="#10B981" />
-                    <Text style={styles.successVerifiedText}>¡Identidad verificada exitosamente!</Text>
+                    <Text style={styles.successVerifiedText}>Identidad verificada exitosamente</Text>
                   </View>
 
                   <Text style={styles.modalHelperText}>
                     Crea una nueva contraseña segura para tu cuenta de Hurios Rally.
                   </Text>
 
-                  <Text style={styles.fieldLabel}>Nueva Contraseña (mín. 8 caracteres con mayúscula, número y símbolo) *</Text>
+                  <Text style={styles.fieldLabel}>
+                    Nueva Contraseña (mín. 8 caracteres con mayúscula, número y símbolo) *
+                  </Text>
                   <TextInput
                     style={styles.modalInput}
                     placeholder="••••••••"
@@ -942,7 +905,7 @@ export const LoginScreen: React.FC<Props> = ({ onLoginSuccess }) => {
         </View>
       </Modal>
 
-      {/* ================= MODAL 3: ACTUALIZACIÓN DE CONTRASEÑA ================= */}
+      {/* Modal de Actualización de Contraseña */}
       <Modal visible={showUpdatePassModal} animationType="slide" transparent>
         <View style={styles.modalBackdrop}>
           <View style={styles.modalCard}>
@@ -959,7 +922,7 @@ export const LoginScreen: React.FC<Props> = ({ onLoginSuccess }) => {
             <Text style={styles.fieldLabel}>Nombre de Usuario *</Text>
             <TextInput
               style={styles.modalInput}
-              placeholder="admin_rally"
+              placeholder="Ej. carlos_mendoza"
               value={updateUser}
               onChangeText={setUpdateUser}
               autoCapitalize="none"
@@ -974,7 +937,9 @@ export const LoginScreen: React.FC<Props> = ({ onLoginSuccess }) => {
               secureTextEntry
             />
 
-            <Text style={styles.fieldLabel}>Nueva Contraseña (mín. 8 caracteres con mayúscula, número y símbolo) *</Text>
+            <Text style={styles.fieldLabel}>
+              Nueva Contraseña (mín. 8 caracteres con mayúscula, número y símbolo) *
+            </Text>
             <TextInput
               style={styles.modalInput}
               placeholder="••••••••"
@@ -990,7 +955,7 @@ export const LoginScreen: React.FC<Props> = ({ onLoginSuccess }) => {
         </View>
       </Modal>
 
-      {/* ================= MODAL BIOMÉTRICO ELEGANTE ================= */}
+      {/* Modal Biométrico */}
       <Modal visible={showBioModal} animationType="fade" transparent>
         <View style={styles.dialogOverlay}>
           <View style={styles.dialogCard}>
@@ -1020,7 +985,7 @@ export const LoginScreen: React.FC<Props> = ({ onLoginSuccess }) => {
         </View>
       </Modal>
 
-      {/* ================= MODAL DE FEEDBACK / DIÁLOGO PROFESIONAL ================= */}
+      {/* Modal de Diálogo */}
       <Modal visible={!!dialog} animationType="fade" transparent>
         <View style={styles.dialogOverlay}>
           <View style={styles.dialogCard}>
@@ -1366,11 +1331,7 @@ const styles = StyleSheet.create({
     borderColor: '#CBD5E1',
     borderRadius: 10,
     height: 46,
-    paddingHorizontal: 10,
-    gap: 5,
-  },
-  countryFlag: {
-    fontSize: 16,
+    paddingHorizontal: 12,
   },
   countryCodeText: {
     fontSize: 13,
@@ -1609,7 +1570,6 @@ const styles = StyleSheet.create({
     fontSize: 14.5,
     fontWeight: '800',
   },
-  // Estilos del Flujo de Recuperación en 3 Pasos
   stepsBar: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1750,7 +1710,7 @@ const styles = StyleSheet.create({
     borderColor: '#E2E8F0',
     borderRadius: 8,
     paddingVertical: 7,
-    gap: 4,
+    gap: 5,
   },
   quickAccountBtnActive: {
     backgroundColor: '#0F172A',

@@ -1,11 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
   FlatList,
   StyleSheet,
   TouchableOpacity,
-  Image,
   Modal,
   ScrollView,
   TextInput,
@@ -15,6 +14,15 @@ import { Ionicons } from '@expo/vector-icons';
 import { useCart } from '../context/CartContext';
 import { StorageService } from '../services/StorageService';
 import { Usuario } from '../types';
+import { ProductImage } from '../components/ProductImage';
+import {
+  ErroresCheckout,
+  formatearTarjeta,
+  formatearVencimiento,
+  soloDigitos,
+  validarCheckout,
+} from '../utils/validators';
+import { generarCodigoPedido } from '../utils/orders';
 
 interface Props {
   navigation: any;
@@ -30,14 +38,17 @@ export const FavoritesScreen: React.FC<Props> = ({ navigation }) => {
     updateQuantity,
     removeFromCart,
     clearCart,
+    refreshCart,
   } = useCart();
 
   const [currentUser, setCurrentUser] = useState<Usuario | null>(null);
   const [listaClientesRegistrados, setListaClientesRegistrados] = useState<Usuario[]>([]);
+  const [clienteSeleccionadoId, setClienteSeleccionadoId] = useState<string | undefined>(undefined);
   const [busquedaCliente, setBusquedaCliente] = useState('');
-  const [showClearModal, setShowClearModal] = React.useState(false);
+  const [showClearModal, setShowClearModal] = useState(false);
   const [showCheckoutModal, setShowCheckoutModal] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
+
   const [metodoPago, setMetodoPago] = useState<'Yape / Plin' | 'Tarjeta Débito/Crédito' | 'Contraentrega SMP'>('Yape / Plin');
   const [tipoComprobante, setTipoComprobante] = useState<'Boleta Electrónica' | 'Factura Comercial'>('Boleta Electrónica');
   const [clienteNombre, setClienteNombre] = useState('');
@@ -45,6 +56,10 @@ export const FavoritesScreen: React.FC<Props> = ({ navigation }) => {
   const [numeroDoc, setNumeroDoc] = useState('');
   const [numOperacion, setNumOperacion] = useState('');
   const [numTarjeta, setNumTarjeta] = useState('');
+  const [vencimiento, setVencimiento] = useState('');
+  const [cvv, setCvv] = useState('');
+  const [errores, setErrores] = useState<ErroresCheckout>({});
+
   const [cotizacionGenerada, setCotizacionGenerada] = useState<{
     id: string;
     total: number;
@@ -53,35 +68,35 @@ export const FavoritesScreen: React.FC<Props> = ({ navigation }) => {
     cliente?: string;
   } | null>(null);
 
+  const cargarDatos = useCallback(async () => {
+    const [sesion, todos] = await Promise.all([
+      StorageService.getSesion(),
+      StorageService.getUsuarios(),
+    ]);
+    if (sesion) setCurrentUser(sesion);
+    setListaClientesRegistrados(todos.filter((u) => u.rol === 'Cliente'));
+    await refreshCart();
+  }, [refreshCart]);
+
   useEffect(() => {
-    cargarSesion();
-    cargarClientes();
-  }, []);
-
-  const cargarSesion = async () => {
-    const sesion = await StorageService.getSesion();
-    if (sesion) {
-      setCurrentUser(sesion);
-    }
-  };
-
-  const cargarClientes = async () => {
-    const todos = await StorageService.getUsuarios();
-    const soloClientes = todos.filter((u) => u.rol === 'Cliente');
-    setListaClientesRegistrados(soloClientes);
-  };
+    cargarDatos();
+    const unsubscribe = navigation.addListener('focus', () => {
+      cargarDatos();
+    });
+    return unsubscribe;
+  }, [navigation, cargarDatos]);
 
   const seleccionarClienteRegistrado = (cli: Usuario) => {
+    setClienteSeleccionadoId(cli.id);
     setClienteNombre(cli.nombreCompleto);
     setBusquedaCliente('');
     if (cli.telefono) {
-      // Extraer solo dígitos sin el +51 si existe
       const soloNum = cli.telefono.replace(/[^0-9]/g, '').slice(-9);
       setClienteTelefono(soloNum);
     }
+    setErrores((prev) => ({ ...prev, cliente: undefined, telefono: undefined }));
   };
 
-  // Filtrado reactivo en tiempo real para búsqueda ERP de clientes
   const clientesFiltrados = listaClientesRegistrados.filter((cli) => {
     if (!busquedaCliente.trim()) return true;
     const q = busquedaCliente.toLowerCase().trim();
@@ -104,12 +119,36 @@ export const FavoritesScreen: React.FC<Props> = ({ navigation }) => {
 
   const abrirCheckout = () => {
     if (items.length === 0) return;
+    setErrores({});
     setShowCheckoutModal(true);
   };
 
+  const esAsesor = currentUser?.rol === 'Asesor';
+
   const handleConfirmarPedidoYpago = async () => {
-    const codPed = `PED-${Math.floor(1000 + Math.random() * 9000)}`;
-    const nombreFinal = clienteNombre.trim() || (currentUser?.rol === 'Asesor' ? 'Cliente de Mostrador' : (currentUser?.nombreCompleto || 'Cliente'));
+    const nuevosErrores = validarCheckout({
+      esAsesor,
+      clienteNombre,
+      clienteTelefono,
+      metodoPago,
+      tipoComprobante,
+      numeroDoc,
+      numOperacion,
+      numTarjeta,
+      vencimiento,
+      cvv,
+    });
+
+    if (Object.keys(nuevosErrores).length > 0) {
+      setErrores(nuevosErrores);
+      return;
+    }
+
+    const existentes = await StorageService.getHistorialPedidos();
+    const codPed = generarCodigoPedido(existentes);
+    const nombreFinal =
+      clienteNombre.trim() ||
+      (esAsesor ? 'Cliente de Mostrador' : currentUser?.nombreCompleto || 'Cliente');
 
     await StorageService.savePedidoEnHistorial({
       id: codPed,
@@ -119,10 +158,15 @@ export const FavoritesScreen: React.FC<Props> = ({ navigation }) => {
       igv,
       totalCotizado: total,
       estado: metodoPago === 'Contraentrega SMP' ? 'Confirmado' : 'Pagado',
+      clienteId: esAsesor ? clienteSeleccionadoId : currentUser?.id,
       clienteNombre: nombreFinal,
+      clienteTelefono: clienteTelefono.trim() || currentUser?.telefono,
+      creadoPorId: currentUser?.id,
+      creadoPorNombre: currentUser?.nombreCompleto,
       metodoPago,
       comprobanteTipo: tipoComprobante,
       documentoNumero: numeroDoc.trim() || undefined,
+      numOperacion: metodoPago === 'Yape / Plin' ? numOperacion.trim() : undefined,
     });
 
     setCotizacionGenerada({
@@ -135,34 +179,40 @@ export const FavoritesScreen: React.FC<Props> = ({ navigation }) => {
 
     setShowCheckoutModal(false);
     await clearCart();
+    setNumeroDoc('');
+    setNumOperacion('');
+    setNumTarjeta('');
+    setVencimiento('');
+    setCvv('');
+    setErrores({});
     setShowSuccessModal(true);
   };
 
-  const esAsesor = currentUser?.rol === 'Asesor';
-
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      {/* Header Oficial (Figura A5) */}
+      {/* Encabezado */}
       <View style={styles.header}>
         <TouchableOpacity style={styles.headerBtn} onPress={() => navigation.goBack()}>
           <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>
-          {esAsesor ? '💼 Mostrador de Ventas / Cotizador' : 'Mi Pre-orden'}
+          {esAsesor ? 'Mostrador / Cotizador' : 'Mi Pre-orden'}
         </Text>
         <TouchableOpacity style={styles.headerBtn} onPress={handleVaciarPreorden}>
           <Ionicons name="trash-outline" size={22} color="#FFFFFF" />
         </TouchableOpacity>
       </View>
 
-      {/* Banner Resumen de Repuestos Agregados */}
+      {/* Resumen de Repuestos Agregados */}
       <View style={styles.bannerBlue}>
         <View style={styles.bannerIconBox}>
           <Ionicons name="cart" size={20} color="#0066FF" />
         </View>
-        <View>
+        <View style={{ flex: 1 }}>
           <Text style={styles.bannerTitle}>Resumen de repuestos</Text>
-          <Text style={styles.bannerCount}>{totalCount} productos agregados</Text>
+          <Text style={styles.bannerCount}>
+            {totalCount} unidad(es) en {items.length} código(s) OEM
+          </Text>
         </View>
       </View>
 
@@ -172,8 +222,8 @@ export const FavoritesScreen: React.FC<Props> = ({ navigation }) => {
         keyExtractor={(item) => `${item.repuesto.id}-${item.repuesto.codigoOEM}`}
         renderItem={({ item }) => (
           <View style={styles.itemCard}>
-            <Image
-              source={{ uri: item.repuesto.imagenUri }}
+            <ProductImage
+              uri={item.repuesto.imagenUri}
               style={styles.itemImage}
               resizeMode="contain"
             />
@@ -189,11 +239,20 @@ export const FavoritesScreen: React.FC<Props> = ({ navigation }) => {
                   <Ionicons name="trash-outline" size={18} color="#94A3B8" />
                 </TouchableOpacity>
               </View>
-              <Text style={styles.itemOEM}>OEM: {item.repuesto.codigoOEM}</Text>
-              <Text style={styles.itemUnit}>S/ {item.repuesto.precio.toFixed(2)}</Text>
+              <Text style={styles.itemOEM}>
+                OEM: {item.repuesto.codigoOEM} • Stock: {item.repuesto.stock}
+              </Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Text style={styles.itemUnit}>S/ {item.repuesto.precio.toFixed(2)} c/u</Text>
+                {item.repuesto.fotoInspeccionUri && (
+                  <View style={styles.photoAttachedPill}>
+                    <Ionicons name="camera" size={11} color="#059669" />
+                    <Text style={styles.photoAttachedText}>Foto adjunta</Text>
+                  </View>
+                )}
+              </View>
 
               <View style={styles.itemBottomRow}>
-                {/* Control + y - */}
                 <View style={styles.qtyBox}>
                   <TouchableOpacity
                     onPress={() => updateQuantity(item.repuesto.id, -1)}
@@ -204,13 +263,20 @@ export const FavoritesScreen: React.FC<Props> = ({ navigation }) => {
                   <Text style={styles.qtyVal}>{item.cantidad}</Text>
                   <TouchableOpacity
                     onPress={() => updateQuantity(item.repuesto.id, 1)}
+                    disabled={item.cantidad >= item.repuesto.stock}
                     style={styles.qtyBtn}
                   >
-                    <Text style={styles.qtyBtnTxt}>+</Text>
+                    <Text
+                      style={[
+                        styles.qtyBtnTxt,
+                        item.cantidad >= item.repuesto.stock && { color: '#CBD5E1' },
+                      ]}
+                    >
+                      +
+                    </Text>
                   </TouchableOpacity>
                 </View>
 
-                {/* Subtotal del ítem */}
                 <Text style={styles.itemSubtotal}>
                   S/ {(item.repuesto.precio * item.cantidad).toFixed(2)}
                 </Text>
@@ -236,11 +302,11 @@ export const FavoritesScreen: React.FC<Props> = ({ navigation }) => {
         contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 16 }}
       />
 
-      {/* Bloque Financiero y Botón Enviar Cotización (Figura A5) */}
+      {/* Resumen Financiero */}
       {items.length > 0 && (
         <View style={styles.financeFooter}>
           <View style={styles.financeRow}>
-            <Text style={styles.financeLabel}>Subtotal</Text>
+            <Text style={styles.financeLabel}>Subtotal (Valor Venta)</Text>
             <Text style={styles.financeVal}>S/ {subtotal.toFixed(2)}</Text>
           </View>
           <View style={styles.financeRow}>
@@ -307,7 +373,7 @@ export const FavoritesScreen: React.FC<Props> = ({ navigation }) => {
         </View>
       </Modal>
 
-      {/* ================= MODAL DE CHECKOUT Y PASARELA DE PAGO ================= */}
+      {/* Modal de Checkout y Pasarela de Pago */}
       <Modal visible={showCheckoutModal} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
           <View style={styles.checkoutBox}>
@@ -322,14 +388,12 @@ export const FavoritesScreen: React.FC<Props> = ({ navigation }) => {
             </View>
 
             <ScrollView showsVerticalScrollIndicator={false}>
-              {/* Resumen Financiero Rápido */}
               <View style={styles.checkoutTotalBanner}>
                 <Text style={styles.checkoutTotalLabel}>Monto Total a Liquidar:</Text>
                 <Text style={styles.checkoutTotalAmount}>S/ {total.toFixed(2)}</Text>
                 <Text style={styles.checkoutIgvNote}>Incluye IGV 18% (S/ {igv.toFixed(2)})</Text>
               </View>
 
-              {/* Datos del Cliente en Mostrador (Específico para Rol Asesor) */}
               {esAsesor && (
                 <View style={styles.asesorClientBox}>
                   <View style={styles.asesorClientHeader}>
@@ -339,11 +403,10 @@ export const FavoritesScreen: React.FC<Props> = ({ navigation }) => {
                   <Text style={styles.asesorClientSub}>
                     Como asesor, registra la identidad del cliente que realiza la compra presencial:
                   </Text>
-                  {/* Buscador con Lista Desplegable idéntica a la imagen */}
+
                   <View style={styles.erpSearchSection}>
                     <Text style={styles.erpSearchLabel}>BUSCAR CLIENTE REGISTRADO</Text>
-                    
-                    {/* Barra de Búsqueda con Lupa y botón Limpiar */}
+
                     <View style={styles.dropdownInputContainer}>
                       <Ionicons name="search" size={20} color="#334155" style={{ marginLeft: 10 }} />
                       <TextInput
@@ -360,7 +423,6 @@ export const FavoritesScreen: React.FC<Props> = ({ navigation }) => {
                       )}
                     </View>
 
-                    {/* Menú Desplegable directamente bajo la barra de búsqueda (Como la imagen) */}
                     {busquedaCliente.trim().length > 0 && (
                       <View style={styles.dropdownMenuBox}>
                         {clientesFiltrados.length > 0 ? (
@@ -370,11 +432,11 @@ export const FavoritesScreen: React.FC<Props> = ({ navigation }) => {
                             showsVerticalScrollIndicator={true}
                           >
                             {clientesFiltrados.map((cli, idx) => {
-                              // Extraer iniciales para el badge tipo 'PJ', 'SUNAT', 'RENIEC'
                               const partes = cli.nombreCompleto.split(' ');
-                              const iniciales = partes.length >= 2
-                                ? `${partes[0][0]}${partes[1][0]}`.toUpperCase()
-                                : cli.nombreCompleto.slice(0, 3).toUpperCase();
+                              const iniciales =
+                                partes.length >= 2
+                                  ? `${partes[0][0]}${partes[1][0]}`.toUpperCase()
+                                  : cli.nombreCompleto.slice(0, 3).toUpperCase();
 
                               return (
                                 <TouchableOpacity
@@ -386,12 +448,10 @@ export const FavoritesScreen: React.FC<Props> = ({ navigation }) => {
                                   onPress={() => seleccionarClienteRegistrado(cli)}
                                   activeOpacity={0.7}
                                 >
-                                  {/* Badge Gris estilo entidad de la imagen */}
                                   <View style={styles.dropdownBadge}>
                                     <Text style={styles.dropdownBadgeText}>{iniciales}</Text>
                                   </View>
 
-                                  {/* Nombre en mayúsculas / título */}
                                   <View style={{ flex: 1 }}>
                                     <Text style={styles.dropdownRowTitle} numberOfLines={1}>
                                       {cli.nombreCompleto.toUpperCase()}
@@ -419,74 +479,116 @@ export const FavoritesScreen: React.FC<Props> = ({ navigation }) => {
 
                   <Text style={styles.asesorInputLabel}>Nombre Completo / Razón Social *</Text>
                   <TextInput
-                    style={styles.asesorInput}
+                    style={[styles.asesorInput, errores.cliente && styles.inputErrorBorder]}
                     placeholder="Ej. Juan Pérez Ramos / Transportes EIRL"
                     placeholderTextColor="#94A3B8"
                     value={clienteNombre}
-                    onChangeText={setClienteNombre}
+                    onChangeText={(t) => {
+                      setClienteNombre(t);
+                      setClienteSeleccionadoId(undefined);
+                      if (errores.cliente) setErrores({ ...errores, cliente: undefined });
+                    }}
                   />
+                  {errores.cliente && <Text style={styles.errorText}>{errores.cliente}</Text>}
 
                   <Text style={styles.asesorInputLabel}>Teléfono de Contacto del Cliente</Text>
                   <TextInput
-                    style={styles.asesorInput}
-                    placeholder="Ej. 987 654 321"
+                    style={[styles.asesorInput, errores.telefono && styles.inputErrorBorder]}
+                    placeholder="Ej. 987654321"
                     placeholderTextColor="#94A3B8"
                     value={clienteTelefono}
-                    onChangeText={(t) => setClienteTelefono(t.replace(/[^0-9]/g, '').slice(0, 9))}
+                    onChangeText={(t) => {
+                      setClienteTelefono(soloDigitos(t).slice(0, 9));
+                      if (errores.telefono) setErrores({ ...errores, telefono: undefined });
+                    }}
                     keyboardType="numeric"
                     maxLength={9}
                   />
+                  {errores.telefono && <Text style={styles.errorText}>{errores.telefono}</Text>}
                 </View>
               )}
 
               {/* Selector de Método de Pago */}
               <Text style={styles.checkoutSectionLabel}>1. SELECCIONA EL MÉTODO DE PAGO</Text>
               <View style={styles.paymentMethodsGrid}>
-                {/* Opción 1: Yape / Plin */}
                 <TouchableOpacity
                   style={[
                     styles.payMethodCard,
                     metodoPago === 'Yape / Plin' && styles.payMethodCardActive,
                   ]}
-                  onPress={() => setMetodoPago('Yape / Plin')}
+                  onPress={() => {
+                    setMetodoPago('Yape / Plin');
+                    setErrores({});
+                  }}
                 >
                   <View style={styles.payMethodIconRow}>
-                    <Ionicons name="phone-portrait-outline" size={20} color={metodoPago === 'Yape / Plin' ? '#7C3AED' : '#64748B'} />
-                    <Text style={[styles.payMethodTitle, metodoPago === 'Yape / Plin' && { color: '#7C3AED' }]}>
+                    <Ionicons
+                      name="phone-portrait-outline"
+                      size={20}
+                      color={metodoPago === 'Yape / Plin' ? '#7C3AED' : '#64748B'}
+                    />
+                    <Text
+                      style={[
+                        styles.payMethodTitle,
+                        metodoPago === 'Yape / Plin' && { color: '#7C3AED' },
+                      ]}
+                    >
                       Yape / Plin
                     </Text>
                   </View>
                   <Text style={styles.payMethodSub}>Billeteras Móviles 24/7</Text>
                 </TouchableOpacity>
 
-                {/* Opción 2: Tarjeta Débito/Crédito */}
                 <TouchableOpacity
                   style={[
                     styles.payMethodCard,
                     metodoPago === 'Tarjeta Débito/Crédito' && styles.payMethodCardActive,
                   ]}
-                  onPress={() => setMetodoPago('Tarjeta Débito/Crédito')}
+                  onPress={() => {
+                    setMetodoPago('Tarjeta Débito/Crédito');
+                    setErrores({});
+                  }}
                 >
                   <View style={styles.payMethodIconRow}>
-                    <Ionicons name="card-outline" size={20} color={metodoPago === 'Tarjeta Débito/Crédito' ? '#0066FF' : '#64748B'} />
-                    <Text style={[styles.payMethodTitle, metodoPago === 'Tarjeta Débito/Crédito' && { color: '#0066FF' }]}>
+                    <Ionicons
+                      name="card-outline"
+                      size={20}
+                      color={metodoPago === 'Tarjeta Débito/Crédito' ? '#0066FF' : '#64748B'}
+                    />
+                    <Text
+                      style={[
+                        styles.payMethodTitle,
+                        metodoPago === 'Tarjeta Débito/Crédito' && { color: '#0066FF' },
+                      ]}
+                    >
                       Tarjeta
                     </Text>
                   </View>
                   <Text style={styles.payMethodSub}>Visa / Mastercard</Text>
                 </TouchableOpacity>
 
-                {/* Opción 3: Contraentrega Mostrador */}
                 <TouchableOpacity
                   style={[
                     styles.payMethodCard,
                     metodoPago === 'Contraentrega SMP' && styles.payMethodCardActive,
                   ]}
-                  onPress={() => setMetodoPago('Contraentrega SMP')}
+                  onPress={() => {
+                    setMetodoPago('Contraentrega SMP');
+                    setErrores({});
+                  }}
                 >
                   <View style={styles.payMethodIconRow}>
-                    <Ionicons name="storefront-outline" size={20} color={metodoPago === 'Contraentrega SMP' ? '#059669' : '#64748B'} />
-                    <Text style={[styles.payMethodTitle, metodoPago === 'Contraentrega SMP' && { color: '#059669' }]}>
+                    <Ionicons
+                      name="storefront-outline"
+                      size={20}
+                      color={metodoPago === 'Contraentrega SMP' ? '#059669' : '#64748B'}
+                    />
+                    <Text
+                      style={[
+                        styles.payMethodTitle,
+                        metodoPago === 'Contraentrega SMP' && { color: '#059669' },
+                      ]}
+                    >
                       Mostrador
                     </Text>
                   </View>
@@ -494,46 +596,116 @@ export const FavoritesScreen: React.FC<Props> = ({ navigation }) => {
                 </TouchableOpacity>
               </View>
 
-              {/* Detalle interactivo según método seleccionado */}
               {metodoPago === 'Yape / Plin' && (
                 <View style={styles.paymentInfoBox}>
-                  <Text style={styles.qrTitle}>📲 Transfiere al número corporativo:</Text>
+                  <Text style={styles.qrTitle}>Transfiere al número corporativo:</Text>
                   <View style={styles.qrAccountRow}>
                     <Text style={styles.qrNumber}>987 654 321</Text>
                     <Text style={styles.qrHolder}>Hurios Rally E.I.R.L.</Text>
                   </View>
-                  <Text style={styles.qrInstruction}>Ingresa el número de operación de tu voucher:</Text>
+                  <Text style={styles.qrInstruction}>
+                    Ingresa el número de operación de tu voucher (6 a 12 dígitos):
+                  </Text>
                   <TextInput
-                    style={styles.checkoutInput}
-                    placeholder="Ej. Operación # 14829304"
+                    style={[
+                      styles.checkoutInput,
+                      { marginBottom: 4 },
+                      errores.operacion && styles.inputErrorBorder,
+                    ]}
+                    placeholder="Ej. 14829304"
                     placeholderTextColor="#94A3B8"
                     value={numOperacion}
-                    onChangeText={setNumOperacion}
+                    onChangeText={(t) => {
+                      setNumOperacion(soloDigitos(t).slice(0, 12));
+                      if (errores.operacion) setErrores({ ...errores, operacion: undefined });
+                    }}
+                    keyboardType="numeric"
+                    maxLength={12}
                   />
+                  {errores.operacion && <Text style={styles.errorText}>{errores.operacion}</Text>}
                 </View>
               )}
 
               {metodoPago === 'Tarjeta Débito/Crédito' && (
                 <View style={styles.paymentInfoBox}>
-                  <Text style={styles.qrInstruction}>Número de tarjeta (Débito o Crédito):</Text>
+                  <Text style={styles.qrInstruction}>Número de tarjeta (16 dígitos):</Text>
                   <TextInput
-                    style={styles.checkoutInput}
-                    placeholder="•••• •••• •••• 4242"
+                    style={[
+                      styles.checkoutInput,
+                      { marginBottom: 8 },
+                      errores.tarjeta && styles.inputErrorBorder,
+                    ]}
+                    placeholder="4242 4242 4242 4242"
                     placeholderTextColor="#94A3B8"
-                    value={numTarjeta}
-                    onChangeText={(t) => setNumTarjeta(t.replace(/[^0-9]/g, '').slice(0, 16))}
+                    value={formatearTarjeta(numTarjeta)}
+                    onChangeText={(t) => {
+                      setNumTarjeta(soloDigitos(t).slice(0, 16));
+                      if (errores.tarjeta) setErrores({ ...errores, tarjeta: undefined });
+                    }}
                     keyboardType="numeric"
-                    maxLength={16}
+                    maxLength={19}
                   />
-                  <Text style={{ fontSize: 11, color: '#10B981', fontWeight: '700', marginTop: 4 }}>
-                    🔒 Transacción encriptada y protegida con SSL
-                  </Text>
+                  {errores.tarjeta && <Text style={styles.errorText}>{errores.tarjeta}</Text>}
+
+                  <View style={styles.cardMetaRow}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.qrInstruction}>Vencimiento (MM/AA):</Text>
+                      <TextInput
+                        style={[
+                          styles.checkoutInput,
+                          { marginBottom: 4 },
+                          errores.vencimiento && styles.inputErrorBorder,
+                        ]}
+                        placeholder="08/28"
+                        placeholderTextColor="#94A3B8"
+                        value={vencimiento}
+                        onChangeText={(t) => {
+                          setVencimiento(formatearVencimiento(t));
+                          if (errores.vencimiento) setErrores({ ...errores, vencimiento: undefined });
+                        }}
+                        keyboardType="numeric"
+                        maxLength={5}
+                      />
+                      {errores.vencimiento && (
+                        <Text style={styles.errorText}>{errores.vencimiento}</Text>
+                      )}
+                    </View>
+
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.qrInstruction}>Código CVV:</Text>
+                      <TextInput
+                        style={[
+                          styles.checkoutInput,
+                          { marginBottom: 4 },
+                          errores.cvv && styles.inputErrorBorder,
+                        ]}
+                        placeholder="123"
+                        placeholderTextColor="#94A3B8"
+                        value={cvv}
+                        onChangeText={(t) => {
+                          setCvv(soloDigitos(t).slice(0, 4));
+                          if (errores.cvv) setErrores({ ...errores, cvv: undefined });
+                        }}
+                        keyboardType="numeric"
+                        maxLength={4}
+                        secureTextEntry
+                      />
+                      {errores.cvv && <Text style={styles.errorText}>{errores.cvv}</Text>}
+                    </View>
+                  </View>
+
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 4 }}>
+                    <Ionicons name="lock-closed" size={13} color="#10B981" />
+                    <Text style={{ fontSize: 11, color: '#10B981', fontWeight: '700' }}>
+                      Transacción encriptada y protegida con SSL
+                    </Text>
+                  </View>
                 </View>
               )}
 
               {metodoPago === 'Contraentrega SMP' && (
                 <View style={styles.paymentInfoBox}>
-                  <Text style={styles.qrTitle}>📍 Pago presencial en caja:</Text>
+                  <Text style={styles.qrTitle}>Pago presencial en caja:</Text>
                   <Text style={styles.qrInstruction}>
                     Se reservará tu pedido en almacén. Podrás pagar en efectivo o POS al momento del retiro en Av. Perú 2450, San Martín de Porres.
                   </Text>
@@ -548,7 +720,10 @@ export const FavoritesScreen: React.FC<Props> = ({ navigation }) => {
                     styles.invoiceChip,
                     tipoComprobante === 'Boleta Electrónica' && styles.invoiceChipActive,
                   ]}
-                  onPress={() => setTipoComprobante('Boleta Electrónica')}
+                  onPress={() => {
+                    setTipoComprobante('Boleta Electrónica');
+                    setErrores({ ...errores, documento: undefined });
+                  }}
                 >
                   <Text
                     style={[
@@ -565,7 +740,10 @@ export const FavoritesScreen: React.FC<Props> = ({ navigation }) => {
                     styles.invoiceChip,
                     tipoComprobante === 'Factura Comercial' && styles.invoiceChipActive,
                   ]}
-                  onPress={() => setTipoComprobante('Factura Comercial')}
+                  onPress={() => {
+                    setTipoComprobante('Factura Comercial');
+                    setErrores({ ...errores, documento: undefined });
+                  }}
                 >
                   <Text
                     style={[
@@ -579,18 +757,26 @@ export const FavoritesScreen: React.FC<Props> = ({ navigation }) => {
               </View>
 
               <TextInput
-                style={styles.checkoutInput}
+                style={[
+                  styles.checkoutInput,
+                  { marginBottom: 4 },
+                  errores.documento && styles.inputErrorBorder,
+                ]}
                 placeholder={
                   tipoComprobante === 'Factura Comercial'
-                    ? 'Ingresa RUC (11 dígitos)'
-                    : 'DNI del comprador (Opcional)'
+                    ? 'Ingresa RUC (11 dígitos - Ej. 20608542191)'
+                    : 'DNI del comprador (8 dígitos - Opcional)'
                 }
                 placeholderTextColor="#94A3B8"
                 value={numeroDoc}
-                onChangeText={(t) => setNumeroDoc(t.replace(/[^0-9]/g, ''))}
+                onChangeText={(t) => {
+                  setNumeroDoc(soloDigitos(t));
+                  if (errores.documento) setErrores({ ...errores, documento: undefined });
+                }}
                 keyboardType="numeric"
                 maxLength={tipoComprobante === 'Factura Comercial' ? 11 : 8}
               />
+              {errores.documento && <Text style={styles.errorText}>{errores.documento}</Text>}
 
               <TouchableOpacity
                 style={styles.btnPagarFinal}
@@ -615,8 +801,8 @@ export const FavoritesScreen: React.FC<Props> = ({ navigation }) => {
             <Text style={styles.confirmTitle}>¡Pedido Registrado con Éxito!</Text>
             <Text style={styles.confirmDesc}>
               {cotizacionGenerada?.metodo === 'Contraentrega SMP'
-                ? 'Tu pedido quedó confirmado para pagar y retirar en nuestro mostrador.'
-                : 'Tu pago fue procesado correctamente y el despacho ha sido programado.'}
+                ? 'Tu pedido quedó confirmado y descontado de Kardex para retirar en mostrador.'
+                : 'Tu pago fue procesado correctamente y el despacho ha sido programado en Almacén.'}
             </Text>
 
             {cotizacionGenerada && (
@@ -625,6 +811,12 @@ export const FavoritesScreen: React.FC<Props> = ({ navigation }) => {
                   <Text style={styles.cotLabel}>N° de Pedido:</Text>
                   <Text style={styles.cotVal}>{cotizacionGenerada.id}</Text>
                 </View>
+                {cotizacionGenerada.cliente && (
+                  <View style={styles.cotRow}>
+                    <Text style={styles.cotLabel}>Titular:</Text>
+                    <Text style={styles.cotVal}>{cotizacionGenerada.cliente}</Text>
+                  </View>
+                )}
                 <View style={styles.cotRow}>
                   <Text style={styles.cotLabel}>Monto Total:</Text>
                   <Text style={[styles.cotVal, { color: '#0066FF' }]}>
@@ -760,6 +952,21 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#64748B',
     marginTop: 2,
+  },
+  photoAttachedPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#ECFDF5',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+    gap: 3,
+    marginTop: 2,
+  },
+  photoAttachedText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#059669',
   },
   itemBottomRow: {
     flexDirection: 'row',
@@ -985,13 +1192,12 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '800',
   },
-  // Estilos de la pasarela y checkout
   checkoutBox: {
     backgroundColor: '#FFFFFF',
     borderRadius: 22,
     padding: 22,
     width: '100%',
-    maxHeight: '90%',
+    maxHeight: '92%',
   },
   checkoutHeader: {
     flexDirection: 'row',
@@ -1086,6 +1292,11 @@ const styles = StyleSheet.create({
     borderColor: '#E2E8F0',
     marginBottom: 14,
   },
+  cardMetaRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 4,
+  },
   qrTitle: {
     fontSize: 12.5,
     fontWeight: '700',
@@ -1154,6 +1365,17 @@ const styles = StyleSheet.create({
     color: '#0F172A',
     marginBottom: 14,
   },
+  inputErrorBorder: {
+    borderColor: '#EF4444',
+    backgroundColor: '#FEF2F2',
+  },
+  errorText: {
+    color: '#DC2626',
+    fontSize: 11,
+    fontWeight: '700',
+    marginBottom: 8,
+    marginTop: 2,
+  },
   btnPagarFinal: {
     flexDirection: 'row',
     backgroundColor: '#10B981',
@@ -1161,7 +1383,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
-    marginTop: 4,
+    marginTop: 10,
     marginBottom: 10,
   },
   btnPagarFinalText: {
@@ -1210,37 +1432,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#0F172A',
     marginBottom: 8,
-  },
-  clientQuickChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#93C5FD',
-    borderRadius: 20,
-    paddingVertical: 5,
-    paddingHorizontal: 10,
-    gap: 4,
-  },
-  clientQuickChipActive: {
-    backgroundColor: '#0066FF',
-    borderColor: '#0066FF',
-  },
-  clientQuickChipText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#1E40AF',
-  },
-  clientQuickChipTextActive: {
-    color: '#FFFFFF',
-  },
-  clientQuickChipSub: {
-    fontSize: 9.5,
-    color: '#60A5FA',
-    fontWeight: '600',
-  },
-  clientQuickChipSubActive: {
-    color: '#E0F2FE',
   },
   erpSearchSection: {
     marginBottom: 12,
