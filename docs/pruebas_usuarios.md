@@ -1,26 +1,26 @@
-# 🧪 Guía de Pruebas de Usuarios y Validación de Datos
+# Guía de Pruebas de Usuarios y Validación de Datos
 
-Este documento sirve como guía para docentes, evaluadores o desarrolladores que clonen el repositorio y deseen realizar pruebas de registro, inicio de sesión, cambio de contraseñas con Regex y navegación por roles en **Hurios Rally App**.
-
----
-
-## 📌 1. Cuentas Maestras Semilla (Precargadas)
-
-Estas tres cuentas vienen inicializadas directamente en la aplicación a través de `StorageService.ts`. No requieren registro previo:
-
-| # | Rol | Nombre Completo | Usuario | Correo Electrónico | Contraseña | Sede |
-|---|:---|:---|:---|:---|:---:|:---|
-| 1 | **Cliente** | Carlos Mendoza Silva | `carlos_mendoza` | `carlos_mendoza.cliente@huriosrally.com` | `Hurios@2026` | Lima Norte / SMP (Sede Central) |
-| 2 | **Asesor** | Edu Morales Carlos | `edu_morales` | `edu_morales.ventas@huriosrally.com` | `Hurios@2026` | Lima Norte / SMP (Sede Central) |
-| 3 | **Almacenero** | Raúl Quispe Huamán | `raul_quispe` | `raul_quispe.almacen@huriosrally.com` | `Hurios@2026` | Almacén Central / Despacho SMP |
+Este documento técnico sirve como protocolo de pruebas para evaluadores, docentes y desarrolladores que requieran verificar el flujo de autenticación, la aplicación de directivas Regex para contraseñas, el aislamiento de pre-órdenes y la segregación por roles en **Hurios Rally App**.
 
 ---
 
-## 🆕 2. Banco de Datos para Pruebas de Nuevos Registros
+## 1. Cuentas Maestras del Sistema
 
-Como la persistencia se gestiona en el almacenamiento local del dispositivo (`AsyncStorage`), cuando otra persona clona el proyecto puede registrar nuevos usuarios utilizando este banco de datos de prueba predefinido:
+Estas tres cuentas se encuentran precargadas en el almacenamiento persistente (`AsyncStorage`) a través de `StorageService.ts`. Pueden utilizarse de inmediato o cargarse con un solo toque desde los botones de acceso rápido de la pantalla de inicio de sesión:
 
-### 👤 Usuario de Prueba 1: Cliente Particular
+| N° | Rol del Sistema | Nombre Completo | Nombre de Usuario | Correo Electrónico Corporativo | Contraseña Segura | Sede Operativa Asignada |
+| :---: | :--- | :--- | :--- | :--- | :---: | :--- |
+| **1** | **Cliente** | Carlos Mendoza Silva | `carlos_mendoza` | `carlos_mendoza.cliente@huriosrally.com` | `Hurios@2026` | Lima Norte / SMP (Sede Central) |
+| **2** | **Asesor** | Edu Morales Carlos | `edu_morales` | `edu_morales.ventas@huriosrally.com` | `Hurios@2026` | Lima Norte / SMP (Sede Central) |
+| **3** | **Almacenero** | Raúl Quispe Huamán | `raul_quispe` | `raul_quispe.almacen@huriosrally.com` | `Hurios@2026` | Almacén Central / Despacho SMP |
+
+---
+
+## 2. Banco de Datos para Pruebas de Nuevos Registros
+
+Dado que la persistencia se gestiona en el almacenamiento local del dispositivo mediante `AsyncStorage`, los evaluadores pueden registrar nuevas cuentas utilizando el siguiente banco de datos estandarizado:
+
+### 2.1. Usuario de Prueba 1: Cliente Particular
 - **Nombre Completo:** `Jorge Luis Ramos Vega`
 - **Teléfono:** `984 123 789`
 - **Rol:** `Cliente`
@@ -29,7 +29,7 @@ Como la persistencia se gestiona en el almacenamiento local del dispositivo (`As
 - **Correo Autogenerado:** `jorge_ramos.cliente@huriosrally.com`
 - **Contraseña Sugerida:** `Ramos@2026`
 
-### 🏢 Usuario de Prueba 2: Cliente Corporativo (Taller Mecánico)
+### 2.2. Usuario de Prueba 2: Cliente Corporativo (Taller Mecánico)
 - **Nombre Completo:** `Autoservicios & Frenos Norte S.A.C.`
 - **Teléfono:** `992 554 112`
 - **Rol:** `Cliente`
@@ -38,7 +38,7 @@ Como la persistencia se gestiona en el almacenamiento local del dispositivo (`As
 - **Correo Autogenerado:** `autoservicios_frenos.cliente@huriosrally.com`
 - **Contraseña Sugerida:** `Taller#2026`
 
-### 💼 Usuario de Prueba 3: Asesor Comercial de Ventas
+### 2.3. Usuario de Prueba 3: Asesor Comercial de Ventas
 - **Nombre Completo:** `Mariana Castro Solís`
 - **Teléfono:** `971 882 334`
 - **Rol:** `Asesor`
@@ -47,7 +47,7 @@ Como la persistencia se gestiona en el almacenamiento local del dispositivo (`As
 - **Correo Autogenerado:** `mariana_castro.ventas@huriosrally.com`
 - **Contraseña Sugerida:** `Ventas$2026`
 
-### 📦 Usuario de Prueba 4: Auxiliar de Almacén y Despacho
+### 2.4. Usuario de Prueba 4: Auxiliar de Almacén y Despacho
 - **Nombre Completo:** `Víctor Hugo Palacios`
 - **Teléfono:** `955 641 200`
 - **Rol:** `Almacenero`
@@ -56,7 +56,7 @@ Como la persistencia se gestiona en el almacenamiento local del dispositivo (`As
 - **Correo Autogenerado:** `victor_palacios.almacen@huriosrally.com`
 - **Contraseña Sugerida:** `Kardex!2026`
 
-### 💼 Usuario de Prueba 5: Asesor de Repuestos Automotrices
+### 2.5. Usuario de Prueba 5: Asesor de Repuestos Automotrices
 - **Nombre Completo:** `Andrés Felipe Carranza`
 - **Teléfono:** `944 312 990`
 - **Rol:** `Asesor`
@@ -67,7 +67,7 @@ Como la persistencia se gestiona en el almacenamiento local del dispositivo (`As
 
 ---
 
-## 🔒 3. Casos de Prueba para Validación de Contraseñas (Regex)
+## 3. Casos de Prueba para Validación de Contraseñas (Regex)
 
 El sistema evalúa las contraseñas mediante **expresiones regulares estrictas**:
 - Longitud mínima de **8 caracteres**.
@@ -76,16 +76,16 @@ El sistema evalúa las contraseñas mediante **expresiones regulares estrictas**
 - Al menos un **número** (`[0-9]`).
 - Al menos un **carácter especial** (`[!@#$%^&*(),.?":{}|<>_\-]`).
 
-### ❌ Contraseñas que deben ser RECHAZADAS (Casos Inválidos):
-| Contraseña Ingresada | Motivo del Rechazo | Mensaje en la App |
+### 3.1. Casos de Prueba Inválidos (Rechazados por Política Regex)
+| Contraseña Ingresada | Motivo del Rechazo | Mensaje Desplegado en la App |
 | :--- | :--- | :--- |
-| `123456` | Menor a 8 caracteres, sin letras ni símbolos | *La contraseña debe tener como mínimo 8 caracteres.* |
-| `huriosrally` | Sin mayúscula, sin números, sin símbolos | *La contraseña debe contener al menos una letra mayúscula (A-Z).* |
-| `HURIOSRALLY` | Sin minúscula, sin números, sin símbolos | *La contraseña debe contener al menos una letra minúscula (a-z).* |
-| `HuriosRally` | Sin números, sin símbolos | *La contraseña debe contener al menos un número (0-9).* |
+| `123456` | Longitud menor a 8 caracteres, sin letras ni símbolos | *La contraseña debe tener como mínimo 8 caracteres.* |
+| `huriosrally` | Sin mayúscula, sin números, sin caracteres especiales | *La contraseña debe contener al menos una letra mayúscula (A-Z).* |
+| `HURIOSRALLY` | Sin minúscula, sin números, sin caracteres especiales | *La contraseña debe contener al menos una letra minúscula (a-z).* |
+| `HuriosRally` | Sin números, sin caracteres especiales | *La contraseña debe contener al menos un número (0-9).* |
 | `Hurios2026` | Sin carácter especial | *La contraseña debe contener al menos un carácter especial (@, $, #, etc.).* |
 
-### ✔️ Contraseñas que deben ser ACEPTADAS (Casos Válidos):
+### 3.2. Casos de Prueba Válidos (Aprobados por el Validador)
 - `Hurios@2026` *(Cumple con longitud 11, mayúscula, minúscula, número y símbolo `@`)*
 - `Rally#2026` *(Cumple con longitud 10, mayúscula, minúscula, número y símbolo `#`)*
 - `Motor$8899` *(Cumple con longitud 10, mayúscula, minúscula, número y símbolo `$`)*
@@ -94,10 +94,11 @@ El sistema evalúa las contraseñas mediante **expresiones regulares estrictas**
 
 ---
 
-## 🛒 4. Prueba de Aislamiento de Carrito y Favoritos por Usuario
+## 4. Protocolo de Verificación de Aislamiento de Carrito y Favoritos
 
-1. Iniciar sesión con **Cliente** (`carlos_mendoza`).
-2. Agregar 2 repuestos al carrito (ej. Pastillas de Freno y Disco Ventilado) y marcar un producto como Favorito.
-3. Ir al Perfil y presionar **Cerrar Sesión**.
-4. Iniciar sesión con **Asesor** (`edu_morales`) o crear un usuario nuevo.
-5. **Resultado esperado:** El carrito de compras del nuevo usuario estará en **0 productos (vacío)** y sus favoritos estarán limpios, confirmando que la persistencia se encuentra segmentada individualmente en `AsyncStorage`.
+1. Iniciar sesión con el usuario de rol **Cliente** (`carlos_mendoza`).
+2. Agregar 2 repuestos al carrito (por ejemplo, *Pastillas de Freno* y *Disco Ventilado*) y marcar un producto como favorito.
+3. Dirigirse a la pestaña de **Perfil** y presionar el botón **Cerrar Sesión**.
+4. Iniciar sesión con el usuario de rol **Asesor** (`edu_morales`) o crear un usuario nuevo.
+5. **Resultado Esperado de la Prueba:**  
+   El carrito de compras del nuevo usuario se presentará con **0 productos (vacío)** y su lista de favoritos no contendrá los elementos del usuario anterior, confirmando que las claves de almacenamiento en `AsyncStorage` se encuentran aisladas por el identificador de usuario (`@hurios_cart_{userId}`).
