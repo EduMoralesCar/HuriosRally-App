@@ -13,6 +13,9 @@ app.use(express.json());
 // Clave: email en minúsculas -> { code, expiresAt, username }
 const verificationCodes = new Map();
 
+// Almacén en memoria para sincronización REST opcional (Módulo 3.4 Persistencia de Datos)
+const syncedOrders = [];
+
 // Configuración del transporter SMTP con Gmail
 const transporter = nodemailer.createTransport({
   host: process.env.SMTP_HOST || 'smtp.gmail.com',
@@ -29,7 +32,39 @@ app.get('/health', (req, res) => {
   res.json({
     status: 'online',
     empresa: 'HURIOS RALLY E.I.R.L.',
+    modulosActivos: ['Auth OTP SMTP', 'Persistencia Hibrida REST', 'Auditoria RBAC'],
     timestamp: new Date().toISOString(),
+  });
+});
+
+/**
+ * Endpoint REST Informativo de Persistencia y Estadísticas (Módulo 3.4 & 3.5)
+ */
+app.get('/api/persistence/status', (req, res) => {
+  res.json({
+    success: true,
+    arquitectura: 'Híbrida Local-First (AsyncStorage + Express REST API)',
+    otpActivos: verificationCodes.size,
+    ordenesSincronizadas: syncedOrders.length,
+    timestamp: new Date().toISOString(),
+  });
+});
+
+app.post('/api/orders/sync', (req, res) => {
+  const { pedido } = req.body;
+  if (!pedido || !pedido.id) {
+    return res.status(400).json({ success: false, message: 'Datos de pedido inválidos.' });
+  }
+  const idx = syncedOrders.findIndex((o) => o.id === pedido.id);
+  if (idx >= 0) {
+    syncedOrders[idx] = pedido;
+  } else {
+    syncedOrders.unshift(pedido);
+  }
+  return res.json({
+    success: true,
+    message: `Pedido ${pedido.id} respaldado en API REST.`,
+    totalRespaldados: syncedOrders.length,
   });
 });
 
@@ -116,7 +151,7 @@ app.post('/api/auth/send-reset-code', async (req, res) => {
               <td style="padding: 35px 30px 25px 30px; text-align: center;">
                 <div style="display: inline-block; background-color: #EFF6FF; border-radius: 30px; padding: 6px 16px; margin-bottom: 18px;">
                   <span style="color: #0066FF; font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: 1px;">
-                    🛡 Verificación de Seguridad
+                    Verificación de Seguridad
                   </span>
                 </div>
 
@@ -151,7 +186,7 @@ app.post('/api/auth/send-reset-code', async (req, res) => {
 
                 <!-- TIEMPO DE EXPIRACIÓN -->
                 <p style="color: #EF4444; font-size: 12px; font-weight: 700; margin: 0 0 24px 0;">
-                  ⏱ Este código vencerá en ${expireMinutes} minutos.
+                  Este código vencerá en ${expireMinutes} minutos.
                 </p>
 
                 <div style="border-top: 1px solid #F1F5F9; padding-top: 20px;">

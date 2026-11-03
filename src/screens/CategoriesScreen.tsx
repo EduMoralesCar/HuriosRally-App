@@ -38,7 +38,7 @@ const CATEGORIAS_INFO: CategoriaCard[] = [
   {
     id: 'Suspensión',
     nombre: 'Suspensión y Dirección',
-    icono: 'git-commit-outline',
+    icono: 'options-outline',
     descripcion: 'Amortiguadores presurizados a gas, trapecios, rótulas y bieletas.',
     color: '#3B82F6',
   },
@@ -52,7 +52,7 @@ const CATEGORIAS_INFO: CategoriaCard[] = [
   {
     id: 'Motor',
     nombre: 'Componentes de Motor',
-    icono: 'hardware-chip-outline',
+    icono: 'cog-outline',
     descripcion: 'Bujías de iridio, fajas de distribución, bombas de agua e inyectores.',
     color: '#F59E0B',
   },
@@ -67,18 +67,21 @@ const CATEGORIAS_INFO: CategoriaCard[] = [
 
 export const CategoriesScreen: React.FC<Props> = ({ navigation }) => {
   const [selectedCat, setSelectedCat] = useState<CategoriaRepuesto | null>(null);
+  const [catalogoRepuestos, setCatalogoRepuestos] = useState<Repuesto[]>(REPUESTOS_MOCK);
   const [favoritosIds, setFavoritosIds] = useState<string[]>([]);
   const [stockOverrides, setStockOverrides] = useState<Record<string, number>>({});
   const [toastMsg, setToastMsg] = useState<string | null>(null);
   const { addToCart } = useCart();
 
   const cargarEstado = useCallback(async () => {
-    const [favs, overrides] = await Promise.all([
+    const [favs, overrides, catalogo] = await Promise.all([
       StorageService.getFavoritos(),
       StorageService.getStockOverrides(),
+      StorageService.getCatalogoRepuestos(),
     ]);
     setFavoritosIds(favs.map((f) => f.id));
     setStockOverrides(overrides);
+    setCatalogoRepuestos(catalogo);
   }, []);
 
   useEffect(() => {
@@ -114,7 +117,7 @@ export const CategoriesScreen: React.FC<Props> = ({ navigation }) => {
   };
 
   const repuestosCategoria = selectedCat
-    ? REPUESTOS_MOCK.filter((r) => r.categoria === selectedCat)
+    ? catalogoRepuestos.filter((r) => r.categoria === selectedCat)
     : [];
 
   return (
@@ -145,7 +148,7 @@ export const CategoriesScreen: React.FC<Props> = ({ navigation }) => {
           <Text style={styles.headerSubtitle}>
             {selectedCat
               ? `${repuestosCategoria.length} repuestos disponibles`
-              : `${REPUESTOS_MOCK.length} repuestos en 5 líneas técnicas`}
+              : `${catalogoRepuestos.length} repuestos en 5 líneas técnicas`}
           </Text>
         </View>
       </View>
@@ -158,7 +161,7 @@ export const CategoriesScreen: React.FC<Props> = ({ navigation }) => {
 
           <View style={styles.grid}>
             {CATEGORIAS_INFO.map((cat) => {
-              const itemsCat = REPUESTOS_MOCK.filter((r) => r.categoria === cat.id);
+              const itemsCat = catalogoRepuestos.filter((r) => r.categoria === cat.id);
               const cantidad = itemsCat.length;
               const unidadesTotales = itemsCat.reduce(
                 (acc, r) => acc + (stockOverrides[r.id] !== undefined ? stockOverrides[r.id] : r.stock),

@@ -42,7 +42,8 @@ export const LoginScreen: React.FC<Props> = ({ onLoginSuccess }) => {
   const [regUser, setRegUser] = useState('');
   const [regEmail, setRegEmail] = useState('');
   const [regPass, setRegPass] = useState('');
-  const [regRol, setRegRol] = useState<'Asesor' | 'Almacenero' | 'Cliente'>('Asesor');
+  const [showRegPass, setShowRegPass] = useState(false);
+  const [regRol, setRegRol] = useState<'Cliente' | 'Asesor' | 'Administrador'>('Cliente');
   const [regTelefono, setRegTelefono] = useState('');
   const [regSede, setRegSede] = useState('Lima Norte / SMP (Sede Central)');
   const [showRegSedeDropdown, setShowRegSedeDropdown] = useState(false);
@@ -56,12 +57,16 @@ export const LoginScreen: React.FC<Props> = ({ onLoginSuccess }) => {
   const [expectedFallbackCode, setExpectedFallbackCode] = useState('');
   const [newResetPassword, setNewResetPassword] = useState('');
   const [confirmResetPassword, setConfirmResetPassword] = useState('');
+  const [showNewResetPass, setShowNewResetPass] = useState(false);
+  const [showConfirmResetPass, setShowConfirmResetPass] = useState(false);
   const [isSendingCode, setIsSendingCode] = useState(false);
 
   // Actualización de contraseña
   const [updateUser, setUpdateUser] = useState('');
   const [updateCurrentPass, setUpdateCurrentPass] = useState('');
   const [updateNewPass, setUpdateNewPass] = useState('');
+  const [showUpdateCurrentPass, setShowUpdateCurrentPass] = useState(false);
+  const [showUpdateNewPass, setShowUpdateNewPass] = useState(false);
 
   // Diálogo de notificación
   const [dialog, setDialog] = useState<{
@@ -96,9 +101,13 @@ export const LoginScreen: React.FC<Props> = ({ onLoginSuccess }) => {
   }, []);
 
   const verificarSesion = async () => {
-    const sesion = await StorageService.getSesion();
-    if (sesion && sesion.isAuthenticated) {
-      onLoginSuccess();
+    try {
+      const sesion = await StorageService.getSesion();
+      if (sesion && sesion.isAuthenticated) {
+        onLoginSuccess();
+      }
+    } catch (e) {
+      console.warn('Error comprobando sesión previa:', e);
     }
   };
 
@@ -108,16 +117,25 @@ export const LoginScreen: React.FC<Props> = ({ onLoginSuccess }) => {
       return;
     }
 
-    setIsLoading(true);
-    const result = await AuthService.login(username, password);
-    setIsLoading(false);
+    try {
+      setIsLoading(true);
+      const result = await AuthService.login(username, password);
+      setIsLoading(false);
 
-    if (result.success) {
-      onLoginSuccess();
-    } else {
+      if (result.success) {
+        onLoginSuccess();
+      } else {
+        mostrarMensaje(
+          'Acceso no concedido',
+          result.message || 'Usuario o contraseña incorrectos. Verifica tus credenciales.',
+          'error'
+        );
+      }
+    } catch (err: any) {
+      setIsLoading(false);
       mostrarMensaje(
-        'Acceso no concedido',
-        result.message || 'Usuario o contraseña incorrectos. Verifica tus credenciales.',
+        'Error de Conexión',
+        err?.message || 'Ocurrió un error inesperado al procesar las credenciales.',
         'error'
       );
     }
@@ -139,7 +157,7 @@ export const LoginScreen: React.FC<Props> = ({ onLoginSuccess }) => {
     }
   };
 
-  const generarCredencialesAuto = (nombre: string, rol: 'Asesor' | 'Almacenero' | 'Cliente') => {
+  const generarCredencialesAuto = (nombre: string, rol: 'Cliente' | 'Asesor' | 'Administrador') => {
     const limpio = nombre
       .toLowerCase()
       .normalize('NFD')
@@ -157,7 +175,7 @@ export const LoginScreen: React.FC<Props> = ({ onLoginSuccess }) => {
     const apellidoPaterno = (partes[1] || '').replace(/[^a-z0-9]/g, '');
 
     const userGenerado = apellidoPaterno ? `${primerNombre}_${apellidoPaterno}` : primerNombre;
-    const rolEmailSlug = rol === 'Asesor' ? 'ventas' : rol === 'Almacenero' ? 'almacen' : 'cliente';
+    const rolEmailSlug = rol === 'Asesor' ? 'ventas' : rol === 'Administrador' ? 'admin' : 'cliente';
     const emailGenerado = `${userGenerado}.${rolEmailSlug}@huriosrally.com`;
 
     setRegUser(userGenerado);
@@ -169,7 +187,7 @@ export const LoginScreen: React.FC<Props> = ({ onLoginSuccess }) => {
     generarCredencialesAuto(texto, regRol);
   };
 
-  const handleRolChange = (nuevoRol: 'Asesor' | 'Almacenero' | 'Cliente') => {
+  const handleRolChange = (nuevoRol: 'Cliente' | 'Asesor' | 'Administrador') => {
     setRegRol(nuevoRol);
     generarCredencialesAuto(regNombre, nuevoRol);
   };
@@ -213,6 +231,7 @@ export const LoginScreen: React.FC<Props> = ({ onLoginSuccess }) => {
       setRegUser('');
       setRegEmail('');
       setRegPass('');
+      setShowRegPass(false);
       setRegTelefono('');
       setShowRegSedeDropdown(false);
       mostrarMensaje(
@@ -309,6 +328,8 @@ export const LoginScreen: React.FC<Props> = ({ onLoginSuccess }) => {
       setVerificationCodeInput('');
       setNewResetPassword('');
       setConfirmResetPassword('');
+      setShowNewResetPass(false);
+      setShowConfirmResetPass(false);
 
       mostrarMensaje(
         'Acceso Restablecido',
@@ -326,6 +347,8 @@ export const LoginScreen: React.FC<Props> = ({ onLoginSuccess }) => {
     setVerificationCodeInput('');
     setNewResetPassword('');
     setConfirmResetPassword('');
+    setShowNewResetPass(false);
+    setShowConfirmResetPass(false);
   };
 
   const handleUpdatePassword = async () => {
@@ -352,6 +375,8 @@ export const LoginScreen: React.FC<Props> = ({ onLoginSuccess }) => {
       setUpdateUser('');
       setUpdateCurrentPass('');
       setUpdateNewPass('');
+      setShowUpdateCurrentPass(false);
+      setShowUpdateNewPass(false);
       mostrarMensaje('Contraseña Actualizada', 'Tu contraseña ha sido modificada con éxito. Ya puedes ingresar.', 'success');
     } else {
       mostrarMensaje('Error', res.message || 'No se pudo actualizar la contraseña.', 'error');
@@ -363,7 +388,7 @@ export const LoginScreen: React.FC<Props> = ({ onLoginSuccess }) => {
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
-      <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
+      <StatusBar barStyle="light-content" />
 
       <ImageBackground
         source={{
@@ -555,7 +580,7 @@ export const LoginScreen: React.FC<Props> = ({ onLoginSuccess }) => {
               activeOpacity={0.8}
             >
               <Ionicons
-                name="cube"
+                name="shield-checkmark"
                 size={15}
                 color={username === 'raul_quispe' ? '#FFFFFF' : '#059669'}
               />
@@ -565,7 +590,7 @@ export const LoginScreen: React.FC<Props> = ({ onLoginSuccess }) => {
                   username === 'raul_quispe' && styles.quickAccountTextActive,
                 ]}
               >
-                Almacén
+                Admin
               </Text>
             </TouchableOpacity>
           </View>
@@ -597,8 +622,8 @@ export const LoginScreen: React.FC<Props> = ({ onLoginSuccess }) => {
           <View style={styles.modalCard}>
             <View style={styles.modalHeader}>
               <View>
-                <Text style={styles.modalTitle}>Registro de Usuario</Text>
-                <Text style={styles.modalSubtitle}>Acceso al sistema Hurios Rally</Text>
+                <Text style={styles.modalTitle}>Crear Cuenta</Text>
+                <Text style={styles.modalSubtitle}>Completa tus datos de acceso</Text>
               </View>
               <TouchableOpacity onPress={() => setShowRegisterModal(false)}>
                 <Ionicons name="close-circle" size={26} color="#94A3B8" />
@@ -630,75 +655,79 @@ export const LoginScreen: React.FC<Props> = ({ onLoginSuccess }) => {
                 />
               </View>
 
-              <Text style={styles.fieldLabel}>Rol en el Sistema *</Text>
+              <Text style={styles.fieldLabel}>Tipo de Cuenta *</Text>
               <View style={styles.roleSelector}>
-                {(['Asesor', 'Almacenero', 'Cliente'] as const).map((rol) => (
+                {(['Cliente', 'Asesor', 'Administrador'] as const).map((rol) => (
                   <TouchableOpacity
                     key={rol}
                     style={[styles.roleChip, regRol === rol && styles.roleChipActive]}
                     onPress={() => handleRolChange(rol)}
                   >
                     <Text style={[styles.roleChipText, regRol === rol && styles.roleChipTextActive]}>
-                      {rol}
+                      {rol === 'Administrador' ? 'Admin' : rol}
                     </Text>
                   </TouchableOpacity>
                 ))}
               </View>
 
-              <Text style={styles.fieldLabel}>Sede de Trabajo *</Text>
-              <TouchableOpacity
-                style={styles.regDropdownBtn}
-                onPress={() => setShowRegSedeDropdown(!showRegSedeDropdown)}
-                activeOpacity={0.8}
-              >
-                <View style={styles.regDropdownLeft}>
-                  <Ionicons name="business-outline" size={17} color="#0066FF" />
-                  <Text style={styles.regDropdownCurrentText} numberOfLines={1}>{regSede}</Text>
-                </View>
-                <Ionicons
-                  name={showRegSedeDropdown ? 'chevron-up' : 'chevron-down'}
-                  size={18}
-                  color="#64748B"
-                />
-              </TouchableOpacity>
+              {regRol !== 'Cliente' && (
+                <>
+                  <Text style={styles.fieldLabel}>Sede de Trabajo *</Text>
+                  <TouchableOpacity
+                    style={styles.regDropdownBtn}
+                    onPress={() => setShowRegSedeDropdown(!showRegSedeDropdown)}
+                    activeOpacity={0.8}
+                  >
+                    <View style={styles.regDropdownLeft}>
+                      <Ionicons name="business-outline" size={17} color="#0066FF" />
+                      <Text style={styles.regDropdownCurrentText} numberOfLines={1}>{regSede}</Text>
+                    </View>
+                    <Ionicons
+                      name={showRegSedeDropdown ? 'chevron-up' : 'chevron-down'}
+                      size={18}
+                      color="#64748B"
+                    />
+                  </TouchableOpacity>
 
-              {showRegSedeDropdown && (
-                <View style={styles.regDropdownList}>
-                  {REG_SEDES.map((sede) => (
-                    <TouchableOpacity
-                      key={sede.id}
-                      style={[
-                        styles.regDropdownOption,
-                        regSede === sede.nombre && styles.regDropdownOptionActive,
-                      ]}
-                      onPress={() => {
-                        setRegSede(sede.nombre);
-                        setShowRegSedeDropdown(false);
-                      }}
-                    >
-                      <View style={{ flex: 1 }}>
-                        <Text
+                  {showRegSedeDropdown && (
+                    <View style={styles.regDropdownList}>
+                      {REG_SEDES.map((sede) => (
+                        <TouchableOpacity
+                          key={sede.id}
                           style={[
-                            styles.regDropdownOptionText,
-                            regSede === sede.nombre && styles.regDropdownOptionTextActive,
+                            styles.regDropdownOption,
+                            regSede === sede.nombre && styles.regDropdownOptionActive,
                           ]}
+                          onPress={() => {
+                            setRegSede(sede.nombre);
+                            setShowRegSedeDropdown(false);
+                          }}
                         >
-                          {sede.nombre}
-                        </Text>
-                        <Text style={styles.regDropdownSubtext}>{sede.direccion}</Text>
-                      </View>
-                      {regSede === sede.nombre && (
-                        <Ionicons name="checkmark-circle" size={18} color="#0066FF" />
-                      )}
-                    </TouchableOpacity>
-                  ))}
-                </View>
+                          <View style={{ flex: 1 }}>
+                            <Text
+                              style={[
+                                styles.regDropdownOptionText,
+                                regSede === sede.nombre && styles.regDropdownOptionTextActive,
+                              ]}
+                            >
+                              {sede.nombre}
+                            </Text>
+                            <Text style={styles.regDropdownSubtext}>{sede.direccion}</Text>
+                          </View>
+                          {regSede === sede.nombre && (
+                            <Ionicons name="checkmark-circle" size={18} color="#0066FF" />
+                          )}
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  )}
+                </>
               )}
 
               <View style={styles.autoCredsCard}>
                 <View style={styles.autoCredsHeader}>
-                  <Ionicons name="sparkles" size={16} color="#0066FF" />
-                  <Text style={styles.autoCredsTitle}>Credenciales Autogeneradas</Text>
+                  <Ionicons name="person-circle-outline" size={18} color="#0066FF" />
+                  <Text style={styles.autoCredsTitle}>Datos de Cuenta Generados</Text>
                 </View>
 
                 <View style={styles.autoCredRow}>
@@ -719,13 +748,27 @@ export const LoginScreen: React.FC<Props> = ({ onLoginSuccess }) => {
               <Text style={styles.fieldLabel}>
                 Contraseña (mín. 8 caracteres con mayúscula, número y símbolo) *
               </Text>
-              <TextInput
-                style={styles.modalInput}
-                placeholder="••••••••"
-                value={regPass}
-                onChangeText={setRegPass}
-                secureTextEntry
-              />
+              <View style={styles.modalPassWrapper}>
+                <TextInput
+                  style={styles.modalPassInput}
+                  placeholder="••••••••"
+                  placeholderTextColor="#94A3B8"
+                  value={regPass}
+                  onChangeText={setRegPass}
+                  secureTextEntry={!showRegPass}
+                />
+                <TouchableOpacity
+                  onPress={() => setShowRegPass(!showRegPass)}
+                  style={styles.eyeBtnModal}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons
+                    name={showRegPass ? 'eye-off-outline' : 'eye-outline'}
+                    size={20}
+                    color="#64748B"
+                  />
+                </TouchableOpacity>
+              </View>
 
               <TouchableOpacity style={styles.modalPrimaryBtn} onPress={handleRegister}>
                 <Text style={styles.modalPrimaryBtnText}>Crear Cuenta y Guardar</Text>
@@ -867,22 +910,50 @@ export const LoginScreen: React.FC<Props> = ({ onLoginSuccess }) => {
                   <Text style={styles.fieldLabel}>
                     Nueva Contraseña (mín. 8 caracteres con mayúscula, número y símbolo) *
                   </Text>
-                  <TextInput
-                    style={styles.modalInput}
-                    placeholder="••••••••"
-                    value={newResetPassword}
-                    onChangeText={setNewResetPassword}
-                    secureTextEntry
-                  />
+                  <View style={styles.modalPassWrapper}>
+                    <TextInput
+                      style={styles.modalPassInput}
+                      placeholder="••••••••"
+                      placeholderTextColor="#94A3B8"
+                      value={newResetPassword}
+                      onChangeText={setNewResetPassword}
+                      secureTextEntry={!showNewResetPass}
+                    />
+                    <TouchableOpacity
+                      onPress={() => setShowNewResetPass(!showNewResetPass)}
+                      style={styles.eyeBtnModal}
+                      activeOpacity={0.7}
+                    >
+                      <Ionicons
+                        name={showNewResetPass ? 'eye-off-outline' : 'eye-outline'}
+                        size={20}
+                        color="#64748B"
+                      />
+                    </TouchableOpacity>
+                  </View>
 
                   <Text style={styles.fieldLabel}>Confirmar Nueva Contraseña *</Text>
-                  <TextInput
-                    style={styles.modalInput}
-                    placeholder="••••••••"
-                    value={confirmResetPassword}
-                    onChangeText={setConfirmResetPassword}
-                    secureTextEntry
-                  />
+                  <View style={styles.modalPassWrapper}>
+                    <TextInput
+                      style={styles.modalPassInput}
+                      placeholder="••••••••"
+                      placeholderTextColor="#94A3B8"
+                      value={confirmResetPassword}
+                      onChangeText={setConfirmResetPassword}
+                      secureTextEntry={!showConfirmResetPass}
+                    />
+                    <TouchableOpacity
+                      onPress={() => setShowConfirmResetPass(!showConfirmResetPass)}
+                      style={styles.eyeBtnModal}
+                      activeOpacity={0.7}
+                    >
+                      <Ionicons
+                        name={showConfirmResetPass ? 'eye-off-outline' : 'eye-outline'}
+                        size={20}
+                        color="#64748B"
+                      />
+                    </TouchableOpacity>
+                  </View>
 
                   <TouchableOpacity
                     style={[styles.modalPrimaryBtn, isSendingCode && { opacity: 0.7 }]}
@@ -929,24 +1000,52 @@ export const LoginScreen: React.FC<Props> = ({ onLoginSuccess }) => {
             />
 
             <Text style={styles.fieldLabel}>Contraseña Actual *</Text>
-            <TextInput
-              style={styles.modalInput}
-              placeholder="••••••••"
-              value={updateCurrentPass}
-              onChangeText={setUpdateCurrentPass}
-              secureTextEntry
-            />
+            <View style={styles.modalPassWrapper}>
+              <TextInput
+                style={styles.modalPassInput}
+                placeholder="••••••••"
+                placeholderTextColor="#94A3B8"
+                value={updateCurrentPass}
+                onChangeText={setUpdateCurrentPass}
+                secureTextEntry={!showUpdateCurrentPass}
+              />
+              <TouchableOpacity
+                onPress={() => setShowUpdateCurrentPass(!showUpdateCurrentPass)}
+                style={styles.eyeBtnModal}
+                activeOpacity={0.7}
+              >
+                <Ionicons
+                  name={showUpdateCurrentPass ? 'eye-off-outline' : 'eye-outline'}
+                  size={20}
+                  color="#64748B"
+                />
+              </TouchableOpacity>
+            </View>
 
             <Text style={styles.fieldLabel}>
               Nueva Contraseña (mín. 8 caracteres con mayúscula, número y símbolo) *
             </Text>
-            <TextInput
-              style={styles.modalInput}
-              placeholder="••••••••"
-              value={updateNewPass}
-              onChangeText={setUpdateNewPass}
-              secureTextEntry
-            />
+            <View style={styles.modalPassWrapper}>
+              <TextInput
+                style={styles.modalPassInput}
+                placeholder="••••••••"
+                placeholderTextColor="#94A3B8"
+                value={updateNewPass}
+                onChangeText={setUpdateNewPass}
+                secureTextEntry={!showUpdateNewPass}
+              />
+              <TouchableOpacity
+                onPress={() => setShowUpdateNewPass(!showUpdateNewPass)}
+                style={styles.eyeBtnModal}
+                activeOpacity={0.7}
+              >
+                <Ionicons
+                  name={showUpdateNewPass ? 'eye-off-outline' : 'eye-outline'}
+                  size={20}
+                  color="#64748B"
+                />
+              </TouchableOpacity>
+            </View>
 
             <TouchableOpacity style={styles.modalPrimaryBtn} onPress={handleUpdatePassword}>
               <Text style={styles.modalPrimaryBtnText}>Guardar Nueva Contraseña</Text>
@@ -1316,6 +1415,27 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#0F172A',
     marginBottom: 6,
+  },
+  modalPassWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 10,
+    height: 46,
+    paddingLeft: 12,
+    paddingRight: 6,
+    marginBottom: 6,
+  },
+  modalPassInput: {
+    flex: 1,
+    fontSize: 14,
+    color: '#0F172A',
+    height: '100%',
+  },
+  eyeBtnModal: {
+    padding: 8,
   },
   phoneInputRow: {
     flexDirection: 'row',

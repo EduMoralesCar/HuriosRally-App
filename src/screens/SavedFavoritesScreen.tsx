@@ -9,7 +9,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { Repuesto } from '../types';
+import { Repuesto, Usuario } from '../types';
 import { StorageService } from '../services/StorageService';
 import { CardRepuesto } from '../components/CardRepuesto';
 import { REPUESTOS_MOCK } from '../data/repuestos.mock';
@@ -20,18 +20,29 @@ interface Props {
 }
 
 export const SavedFavoritesScreen: React.FC<Props> = ({ navigation }) => {
+  const [currentUser, setCurrentUser] = useState<Usuario | null>(null);
   const [favoritos, setFavoritos] = useState<Repuesto[]>([]);
   const [stockOverrides, setStockOverrides] = useState<Record<string, number>>({});
   const [showClearModal, setShowClearModal] = useState(false);
   const [toastMsg, setToastMsg] = useState<string | null>(null);
   const { addToCart } = useCart();
 
+  const esAsesor = currentUser?.rol === 'Asesor';
+
   const cargarFavoritos = useCallback(async () => {
-    const [list, overrides] = await Promise.all([
+    const [sesion, list, overrides] = await Promise.all([
+      StorageService.getSesion(),
       StorageService.getFavoritos(),
       StorageService.getStockOverrides(),
     ]);
-    const sincronizados = list.map((item) => {
+    if (sesion) setCurrentUser(sesion);
+
+    let itemsBase = list;
+    if (sesion?.rol === 'Asesor' && list.length === 0) {
+      itemsBase = REPUESTOS_MOCK.filter((r) => (r.rating || 4.8) >= 4.9).slice(0, 8);
+    }
+
+    const sincronizados = itemsBase.map((item) => {
       const fresco = REPUESTOS_MOCK.find(
         (r) => r.codigoOEM === item.codigoOEM || r.id === item.id
       );
@@ -39,7 +50,9 @@ export const SavedFavoritesScreen: React.FC<Props> = ({ navigation }) => {
     });
     setFavoritos(sincronizados);
     setStockOverrides(overrides);
-    await StorageService.saveFavoritos(sincronizados);
+    if (list.length > 0) {
+      await StorageService.saveFavoritos(sincronizados);
+    }
   }, []);
 
   useEffect(() => {
@@ -59,12 +72,16 @@ export const SavedFavoritesScreen: React.FC<Props> = ({ navigation }) => {
     const updated = favoritos.filter((f) => f.id !== id);
     setFavoritos(updated);
     await StorageService.saveFavoritos(updated);
-    mostrarToast('Repuesto eliminado de favoritos');
+    mostrarToast(esAsesor ? 'Repuesto retirado de la lista' : 'Repuesto eliminado de favoritos');
   };
 
   const handleQuickAdd = async (repuesto: Repuesto) => {
     await addToCart(repuesto, 1);
-    mostrarToast(`${repuesto.nombre} agregado a la pre-orden`);
+    mostrarToast(
+      esAsesor
+        ? `${repuesto.nombre} agregado al cotizador`
+        : `${repuesto.nombre} agregado a la pre-orden`
+    );
   };
 
   const handleVaciar = () => {
@@ -90,16 +107,29 @@ export const SavedFavoritesScreen: React.FC<Props> = ({ navigation }) => {
       )}
 
       <View style={styles.header}>
-        <View style={styles.iconCircle}>
-          <Ionicons name="heart" size={20} color="#EF4444" />
+        <View
+          style={[
+            styles.iconCircle,
+            esAsesor && { backgroundColor: 'rgba(245, 158, 11, 0.18)' },
+          ]}
+        >
+          <Ionicons
+            name={esAsesor ? 'star' : 'heart'}
+            size={20}
+            color={esAsesor ? '#F59E0B' : '#EF4444'}
+          />
         </View>
         <View style={{ flex: 1, marginLeft: 12 }}>
-          <Text style={styles.headerTitle}>Repuestos Favoritos</Text>
+          <Text style={styles.headerTitle}>
+            {esAsesor ? 'Repuestos de Alta Rotación' : 'Mis Favoritos'}
+          </Text>
           <Text style={styles.headerSubtitle}>
-            {favoritos.length} pieza(s) guardada(s) para seguimiento
+            {esAsesor
+              ? `${favoritos.length} piezas frecuentes para atención rápida`
+              : `${favoritos.length} repuesto(s) guardado(s)`}
           </Text>
         </View>
-        {favoritos.length > 0 && (
+        {!esAsesor && favoritos.length > 0 && (
           <TouchableOpacity style={styles.clearBtn} onPress={handleVaciar}>
             <Ionicons name="trash-outline" size={20} color="#FFFFFF" />
           </TouchableOpacity>
@@ -128,11 +158,19 @@ export const SavedFavoritesScreen: React.FC<Props> = ({ navigation }) => {
         ListEmptyComponent={
           <View style={styles.emptyBox}>
             <View style={styles.emptyIconCircle}>
-              <Ionicons name="heart-outline" size={48} color="#CBD5E1" />
+              <Ionicons
+                name={esAsesor ? 'star-outline' : 'heart-outline'}
+                size={48}
+                color="#CBD5E1"
+              />
             </View>
-            <Text style={styles.emptyTitle}>No tienes favoritos guardados</Text>
+            <Text style={styles.emptyTitle}>
+              {esAsesor ? 'Sin repuestos destacados' : 'No tienes favoritos guardados'}
+            </Text>
             <Text style={styles.emptySubtitle}>
-              Toca el icono de corazón en cualquier repuesto del catálogo para agregarlo aquí y acceder rápidamente a sus cotizaciones.
+              {esAsesor
+                ? 'Marca repuestos desde el mostrador para tenerlos disponibles rápidamente.'
+                : 'Toca el icono de corazón en cualquier repuesto del catálogo para guardarlo aquí.'}
             </Text>
             <TouchableOpacity
               style={styles.exploreBtn}
@@ -149,11 +187,11 @@ export const SavedFavoritesScreen: React.FC<Props> = ({ navigation }) => {
         <View style={styles.modalOverlay}>
           <View style={styles.confirmBox}>
             <View style={styles.confirmIconCircle}>
-              <Ionicons name="heart-dislike" size={28} color="#EF4444" />
+              <Ionicons name="trash-outline" size={28} color="#EF4444" />
             </View>
-            <Text style={styles.confirmTitle}>¿Vaciar Favoritos?</Text>
+            <Text style={styles.confirmTitle}>¿Vaciar favoritos?</Text>
             <Text style={styles.confirmDesc}>
-              Se removerán todos los repuestos de tu lista de favoritos.
+              Se quitarán todos los repuestos guardados de tu lista.
             </Text>
             <View style={styles.confirmBtnRow}>
               <TouchableOpacity
@@ -166,7 +204,7 @@ export const SavedFavoritesScreen: React.FC<Props> = ({ navigation }) => {
                 style={styles.confirmBtnDanger}
                 onPress={confirmarVaciar}
               >
-                <Text style={styles.confirmBtnDangerText}>Sí, Vaciar</Text>
+                <Text style={styles.confirmBtnDangerText}>Vaciar</Text>
               </TouchableOpacity>
             </View>
           </View>
