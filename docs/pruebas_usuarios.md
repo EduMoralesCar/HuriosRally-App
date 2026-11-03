@@ -1,18 +1,19 @@
 # Guía de Pruebas de Usuarios y Validación de Datos
 
-Este documento técnico sirve como protocolo de pruebas para evaluadores, docentes y desarrolladores que requieran verificar el flujo de autenticación, la aplicación de directivas Regex para contraseñas, el aislamiento de pre-órdenes y la segregación por roles en **Hurios Rally App**.
+Este documento técnico sirve como protocolo de pruebas para evaluadores, docentes y desarrolladores que requieran verificar el flujo de autenticación con firma SHA-256, la aplicación de directivas Regex para contraseñas, la edición de datos tributarios (`DNI` / `RUC`), el aislamiento de pre-órdenes y la segregación de permisos por roles en **Hurios Rally App**.
 
 ---
 
 ## 1. Cuentas Maestras del Sistema
 
-Estas tres cuentas se encuentran precargadas en el almacenamiento persistente (`AsyncStorage`) a través de `StorageService.ts`. Pueden utilizarse de inmediato o cargarse con un solo toque desde los botones de acceso rápido de la pantalla de inicio de sesión:
+Estas cuentas se encuentran precargadas y sincronizadas en el almacenamiento persistente (`AsyncStorage`) a través de [`StorageService.ts`](file:///d:/Workspace/utp/hurios-rally-app/src/services/StorageService.ts). Las tres primeras pueden cargarse con un solo toque desde los botones de acceso rápido de la pantalla de inicio de sesión:
 
 | N° | Rol del Sistema | Nombre Completo | Nombre de Usuario | Correo Electrónico Corporativo | Contraseña Segura | Sede Operativa Asignada |
 | :---: | :--- | :--- | :--- | :--- | :---: | :--- |
 | **1** | **Cliente** | Carlos Mendoza Silva | `carlos_mendoza` | `carlos_mendoza.cliente@huriosrally.com` | `Hurios@2026` | Lima Norte / SMP (Sede Central) |
 | **2** | **Asesor** | Edu Morales Carlos | `edu_morales` | `edu_morales.ventas@huriosrally.com` | `Hurios@2026` | Lima Norte / SMP (Sede Central) |
-| **3** | **Almacenero** | Raúl Quispe Huamán | `raul_quispe` | `raul_quispe.almacen@huriosrally.com` | `Hurios@2026` | Almacén Central / Despacho SMP |
+| **3** | **Administrador** | Raúl Quispe Huamán | `raul_quispe` | `raul_quispe.almacen@huriosrally.com` | `Hurios@2026` | Almacén Central / Despacho SMP |
+| **4** | **Administrador** | Edu Morales | `admin_rally` | `ventas@huriosrally.com` | `Hurios@2026` | Lima Norte / SMP (Sede Central) |
 
 ---
 
@@ -22,7 +23,7 @@ Dado que la persistencia se gestiona en el almacenamiento local del dispositivo 
 
 ### 2.1. Usuario de Prueba 1: Cliente Particular
 - **Nombre Completo:** `Jorge Luis Ramos Vega`
-- **Teléfono:** `984 123 789`
+- **Teléfono:** `984123789`
 - **Rol:** `Cliente`
 - **Sede:** `Lima Norte / SMP (Sede Central)`
 - **Usuario Autogenerado:** `jorge_ramos`
@@ -31,7 +32,7 @@ Dado que la persistencia se gestiona en el almacenamiento local del dispositivo 
 
 ### 2.2. Usuario de Prueba 2: Cliente Corporativo (Taller Mecánico)
 - **Nombre Completo:** `Autoservicios & Frenos Norte S.A.C.`
-- **Teléfono:** `992 554 112`
+- **Teléfono:** `992554112`
 - **Rol:** `Cliente`
 - **Sede:** `Lima Norte / SMP (Sede Central)`
 - **Usuario Autogenerado:** `autoservicios_frenos`
@@ -40,17 +41,17 @@ Dado que la persistencia se gestiona en el almacenamiento local del dispositivo 
 
 ### 2.3. Usuario de Prueba 3: Asesor Comercial de Ventas
 - **Nombre Completo:** `Mariana Castro Solís`
-- **Teléfono:** `971 882 334`
+- **Teléfono:** `971882334`
 - **Rol:** `Asesor`
 - **Sede:** `Lima Norte / SMP (Sede Central)`
 - **Usuario Autogenerado:** `mariana_castro`
 - **Correo Autogenerado:** `mariana_castro.ventas@huriosrally.com`
 - **Contraseña Sugerida:** `Ventas$2026`
 
-### 2.4. Usuario de Prueba 4: Auxiliar de Almacén y Despacho
+### 2.4. Usuario de Prueba 4: Administrador de Operaciones y Kardex
 - **Nombre Completo:** `Víctor Hugo Palacios`
-- **Teléfono:** `955 641 200`
-- **Rol:** `Almacenero`
+- **Teléfono:** `955641200`
+- **Rol:** `Administrador`
 - **Sede:** `Almacén Central / Despacho SMP`
 - **Usuario Autogenerado:** `victor_palacios`
 - **Correo Autogenerado:** `victor_palacios.almacen@huriosrally.com`
@@ -58,7 +59,7 @@ Dado que la persistencia se gestiona en el almacenamiento local del dispositivo 
 
 ### 2.5. Usuario de Prueba 5: Asesor de Repuestos Automotrices
 - **Nombre Completo:** `Andrés Felipe Carranza`
-- **Teléfono:** `944 312 990`
+- **Teléfono:** `944312990`
 - **Rol:** `Asesor`
 - **Sede:** `Lima Norte / SMP (Sede Central)`
 - **Usuario Autogenerado:** `andres_carranza`
@@ -69,7 +70,7 @@ Dado que la persistencia se gestiona en el almacenamiento local del dispositivo 
 
 ## 3. Casos de Prueba para Validación de Contraseñas (Regex)
 
-El sistema evalúa las contraseñas mediante **expresiones regulares estrictas**:
+El sistema evalúa las contraseñas en inicio de sesión, registro, recuperación OTP y cambio de clave mediante **expresiones regulares estrictas** y permite alternar la visibilidad del texto mediante el ícono de vista (`eye-outline`):
 - Longitud mínima de **8 caracteres**.
 - Al menos una letra **mayúscula** (`[A-Z]`).
 - Al menos una letra **minúscula** (`[a-z]`).
@@ -94,11 +95,23 @@ El sistema evalúa las contraseñas mediante **expresiones regulares estrictas**
 
 ---
 
-## 4. Protocolo de Verificación de Aislamiento de Carrito y Favoritos
+## 4. Protocolo de Verificación por Rol y Aislamiento de Datos
 
-1. Iniciar sesión con el usuario de rol **Cliente** (`carlos_mendoza`).
-2. Agregar 2 repuestos al carrito (por ejemplo, *Pastillas de Freno* y *Disco Ventilado*) y marcar un producto como favorito.
-3. Dirigirse a la pestaña de **Perfil** y presionar el botón **Cerrar Sesión**.
-4. Iniciar sesión con el usuario de rol **Asesor** (`edu_morales`) o crear un usuario nuevo.
-5. **Resultado Esperado de la Prueba:**  
-   El carrito de compras del nuevo usuario se presentará con **0 productos (vacío)** y su lista de favoritos no contendrá los elementos del usuario anterior, confirmando que las claves de almacenamiento en `AsyncStorage` se encuentran aisladas por el identificador de usuario (`@hurios_cart_{userId}`).
+### 4.1. Verificación del Rol Cliente (`carlos_mendoza`)
+1. Iniciar sesión con `carlos_mendoza` (`Hurios@2026`).
+2. Agregar repuestos a la pre-orden y marcar un producto en **Favoritos**.
+3. Abrir la pestaña **Perfil** y pulsar el botón **Editar**:
+   - Verificar que el teléfono muestre los 9 dígitos completos (`987111222`).
+   - Verificar que estén disponibles los campos exclusivos de **DNI (8 dígitos) / RUC (11 dígitos)** y **Dirección de Entrega**.
+   - Confirmar que no aparezcan opciones de administración de usuarios ni bitácora del sistema.
+
+### 4.2. Verificación del Rol Asesor (`edu_morales`)
+1. Cerrar sesión e ingresar con `edu_morales` (`Hurios@2026`).
+2. Verificar que la pre-orden inicie en **0 productos**, comprobando el aislamiento por usuario (`@hurios_cart_{userId}`).
+3. Abrir el menú lateral o la pestaña **Rotación** para acceder a **Repuestos de Alta Rotación** y agregar piezas directamente al mostrador.
+4. Acceder a **Reportes** para consultar estadísticas de ventas y el mantenimiento de catálogo.
+
+### 4.3. Verificación del Rol Administrador (`raul_quispe`)
+1. Cerrar sesión e ingresar con `raul_quispe` (`Hurios@2026`).
+2. Verificar las pestañas operativas de **Kardex**, **Despacho**, **Reportes**, **Catálogo** y **Perfil**.
+3. En **Perfil**, abrir **Gestión de Usuarios** para cambiar roles (`Cliente`, `Asesor`, `Administrador`), dar de baja o restaurar cuentas, y consultar el **Registro de Actividad**.

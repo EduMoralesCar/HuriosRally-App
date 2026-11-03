@@ -1,7 +1,8 @@
-# Sistema Móvil de Comercio, Cotización ERP y Control de Almacén
+# Sistema Móvil de Comercio, Cotización ERP y Administración Logística
 
-[![React Native](https://img.shields.io/badge/React_Native-0.86-61DAFB?style=flat-square&logo=react&logoColor=black)](https://reactnative.dev/)
-[![Expo SDK](https://img.shields.io/badge/Expo_SDK-57-000020?style=flat-square&logo=expo&logoColor=white)](https://expo.dev/)
+[![React Native](https://img.shields.io/badge/React_Native-0.88.1-61DAFB?style=flat-square&logo=react&logoColor=black)](https://reactnative.dev/)
+[![Expo SDK](https://img.shields.io/badge/Expo_SDK-58.0.22-000020?style=flat-square&logo=expo&logoColor=white)](https://expo.dev/)
+[![React](https://img.shields.io/badge/React-19.3.0-087EA4?style=flat-square&logo=react&logoColor=white)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-6.0_Strict-3178C6?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![Node.js](https://img.shields.io/badge/Node.js-18+-339933?style=flat-square&logo=node.js&logoColor=white)](https://nodejs.org/)
 [![Architecture](https://img.shields.io/badge/Architecture-Clean%20%2F%20Layered-orange?style=flat-square)](https://martinfowler.com/bliki/PresentationDomainDataLayering.html)
@@ -10,7 +11,7 @@
 **Entidad Titular:** HURIOS RALLY E.I.R.L.  
 **RUC:** 20608542191  
 **Ubicación:** Av. Perú 2450, San Martín de Porres, Lima Norte  
-**Plataforma de Ejecución:** Android / iOS (Motor React Native sobre Expo Go)  
+**Plataforma de Ejecución:** Android / iOS (Motor React Native sobre Expo Go SDK 58)  
 
 ---
 
@@ -22,7 +23,7 @@
    - [3.1. Diagrama de Casos de Uso del Sistema](#31-diagrama-de-casos-de-uso-del-sistema)
    - [3.2. Diagrama de Arquitectura de Capas y Componentes](#32-diagrama-de-arquitectura-de-capas-y-componentes)
    - [3.3. Diagrama de Secuencia: Proceso de Cotización, Checkout y Registro de Pedido](#33-diagrama-de-secuencia-proceso-de-cotización-checkout-y-registro-de-pedido)
-   - [3.4. Diagrama de Secuencia: Autenticación, Verificación Regex y Recuperación SMTP](#34-diagrama-de-secuencia-autenticación-verificación-regex-y-recuperación-smtp)
+   - [3.4. Diagrama de Secuencia: Autenticación Criptográfica SHA-256 y Recuperación SMTP](#34-diagrama-de-secuencia-autenticación-criptográfica-sha-256-y-recuperación-smtp)
    - [3.5. Diagrama de Clases del Dominio](#35-diagrama-de-clases-del-dominio)
    - [3.6. Diagrama de Entidad - Relación de Persistencia](#36-diagrama-de-entidad---relación-de-persistencia)
    - [3.7. Diagrama de Máquina de Estados del Pedido y Ciclo de Despacho](#37-diagrama-de-máquina-de-estados-del-pedido-y-ciclo-de-despacho)
@@ -40,12 +41,12 @@
 
 ## 1. Introducción y Descripción del Sistema
 
-**Hurios Rally App** es una solución de software móvil multiplataforma desarrollada bajo la disciplina de la Ingeniería de Software para responder a las exigencias operativas y comerciales de **HURIOS RALLY E.I.R.L.**, empresa importadora y distribuidora de repuestos de alto rendimiento automotriz con sede principal en San Martín de Porres (Lima, Perú).
+**Hurios Rally App** es una solución de software móvil multiplataforma desarrollada bajo principios de Ingeniería de Software para responder a las exigencias operativas, comerciales y administrativas de **HURIOS RALLY E.I.R.L.**, empresa importadora y distribuidora de repuestos de alto rendimiento automotriz con sede principal en San Martín de Porres (Lima, Perú).
 
-El sistema consolida en una sola aplicación reactiva los tres pilares del negocio:
-1. **Comercio Minorista Digital:** Catálogo técnico clasificado por códigos OEM y familias automotrices, con cotización en tiempo real y pasarela multimodal.
-2. **Atención en Mostrador (Modo Asesor / ERP):** Interfaz ágil para emisión de proformas presenciales con búsqueda predictiva de clientes registrados, selección de tipo de comprobante (Boleta / Factura con validación RUC) y confirmación de reserva.
-3. **Logística y Control de Kardex (Modo Almacenero):** Monitoreo físico de anaqueles por lote, gestión de umbrales de stock crítico y validación de órdenes para despacho inmediato en tienda.
+El sistema consolida en una sola aplicación reactiva los tres perfiles operativos de la organización:
+1. **Comercio Minorista Digital (Modo Cliente):** Catálogo técnico clasificado por códigos OEM y familias automotrices, lista de favoritos, gestión de datos de facturación personal (`DNI` / `RUC` y dirección de entrega), cotización en tiempo real y pasarela de pago multimodal.
+2. **Atención en Mostrador y Alta Rotación (Modo Asesor / ERP):** Interfaz comercial para emisión de proformas presenciales con búsqueda predictiva de clientes registrados, acceso directo a repuestos de alta rotación, selección de comprobante (Boleta / Factura con validación RUC) y consulta de métricas comerciales.
+3. **Administración General, Logística y Kardex (Modo Administrador):** Control integral del negocio que centraliza el monitoreo físico de anaqueles por lote, atención y despacho de órdenes confirmadas, reportes estadísticos y financieros, mantenimiento CRUD del catálogo OEM y administración de cuentas, roles y bitácora de actividad.
 
 ---
 
@@ -53,16 +54,20 @@ El sistema consolida en una sola aplicación reactiva los tres pilares del negoc
 
 | Módulo | Requisito Funcional | Descripción Técnica |
 | :--- | :--- | :--- |
-| **RF-01** | Autenticación Segura | Inicio de sesión con evaluación Regex de complejidad (mínimo 8 caracteres, mayúscula, minúscula, número y símbolo especial). |
-| **RF-02** | Registro Inteligente | Generación algorítmica de credenciales corporativas (`nombre_apellido` y dominio corporativo según rol). |
-| **RF-03** | Recuperación OTP | Despacho de código de seguridad de 6 dígitos mediante microservicio SMTP con debounce anti-duplicados. |
-| **RF-04** | Catálogo Técnico | 46 piezas OEM en 5 categorías (*Frenos, Suspensión, Motor, Filtros, Accesorios*) con búsqueda debounced (180 ms). |
-| **RF-05** | Inspección Visual | Captura de imagen in situ mediante cámara del dispositivo o selección desde galería para asociar fotos a lotes. |
-| **RF-06** | Pre-orden & Carrito | Contexto global (`CartContext`) con cálculo automático de Subtotal, IGV (18%) y totalización aislada por usuario. |
-| **RF-07** | Pasarela Multimodal | Soporte para Yape/Plin (registro de operación), Tarjeta Débito/Crédito (validación 16 dígitos y CVV) y Contraentrega. |
-| **RF-08** | ERP de Mostrador | Selector predictivo de clientes registrados con dropdown de iniciales y autocompletado de razón social y teléfono. |
-| **RF-09** | Kardex en Tiempo Real | Sincronización bidireccional de anaqueles, ajuste manual de conteo físico y alerta de stock crítico (≤ 3 unid.). |
-| **RF-10** | Control de Despacho | Filtrado de órdenes (*Pendientes, Despachados, Todos*) con acción irreversible de confirmación de entrega física. |
+| **RF-01** | Autenticación Criptográfica | Inicio de sesión con firma SHA-256 + salt institucional, codificación UTF-8 nativa compatible con el motor Hermes, validación Regex y control de visibilidad de contraseña. |
+| **RF-02** | Registro Inteligente | Generación algorítmica de credenciales corporativas (`nombre_apellido` y dominio según rol) con asignación de avatar clásico por defecto. |
+| **RF-03** | Recuperación OTP | Despacho de código de seguridad de 6 dígitos mediante microservicio SMTP con control de expiración y debounce anti-duplicados. |
+| **RF-04** | Catálogo Técnico y CRUD | 46 piezas OEM base en 5 categorías (*Frenos, Suspensión, Motor, Filtros, Accesorios*) con búsqueda debounced (180 ms) y módulo CRUD persistente de repuestos. |
+| **RF-05** | Inspección Visual | Captura de imagen mediante cámara del dispositivo o selección desde galería para asociar fotografías reales a lotes y perfiles. |
+| **RF-06** | Pre-orden & Carrito Aislado | Contexto global (`CartContext`) con cálculo automático de Subtotal, IGV (18%) y totalización aislada por identificador de usuario. |
+| **RF-07** | Favoritos y Alta Rotación | Vista dual (`SavedFavoritesScreen`) que gestiona la lista de deseos para el rol `Cliente` y el catálogo de repuestos de alta rotación para el rol `Asesor`. |
+| **RF-08** | Pasarela Multimodal | Soporte para Yape/Plin (registro de operación), Tarjeta Débito/Crédito (validación 16 dígitos y CVV) y Pago en Mostrador / Contraentrega. |
+| **RF-09** | ERP de Mostrador | Selector predictivo de clientes registrados con autocompletado de nombre/razón social, documento tributario y teléfono de contacto. |
+| **RF-10** | Kardex en Tiempo Real | Sincronización bidireccional de anaqueles, ajuste manual de conteo físico y alerta preventiva de stock crítico (≤ 3 unidades). |
+| **RF-11** | Control de Despacho | Filtrado de órdenes (*Pendientes, Despachados, Todos*) con acción de confirmación de entrega física en tienda. |
+| **RF-12** | Reportes y Estadísticas | Panel analítico (`ReportsScreen`) con recaudación total, ticket promedio, distribución por método de pago, filtros multicriterio y ranking de repuestos. |
+| **RF-13** | Administración de Usuarios | Gestión exclusiva del `Administrador` para asignar roles RBAC, dar de baja, reactivar cuentas y restaurar los usuarios maestros del sistema. |
+| **RF-14** | Perfil Tributario de Cliente | Edición exclusiva para `Cliente` de número telefónico validado a 9 dígitos, documento `DNI` (8 dígitos) o `RUC` (11 dígitos) y dirección de despacho. |
 
 ---
 
@@ -70,30 +75,32 @@ El sistema consolida en una sola aplicación reactiva los tres pilares del negoc
 
 ### 3.1. Diagrama de Casos de Uso del Sistema
 
-Representa las interacciones entre los actores del sistema y los casos de uso fundamentales que cubren la operación comercial y logística.
+Representa las interacciones entre los tres actores primarios del sistema (**Cliente**, **Asesor** y **Administrador**) y los casos de uso que cubren la operación comercial, logística y administrativa.
 
 ```mermaid
 flowchart LR
   subgraph Actores["Actores del Sistema"]
-    A1["Actor: Cliente Particular"]
+    A1["Actor: Cliente"]
     A2["Actor: Asesor Comercial"]
-    A3["Actor: Almacenero"]
+    A3["Actor: Administrador"]
     A4["Servicio Externo: Servidor SMTP Node.js"]
   end
 
   subgraph CasosDeUso["Casos de Uso Principales - Hurios Rally App"]
-    UC01["UC01: Autenticacion con Validacion Regex"]
+    UC01["UC01: Autenticacion SHA-256 con Validacion Regex"]
     UC02["UC02: Recuperacion de Clave con Codigo OTP"]
     UC03["UC03: Registro Inteligente de Usuario"]
     UC04["UC04: Explorar Catalogo por Familia Tecnica"]
     UC05["UC05: Inspeccionar Repuesto con Camara / Galeria"]
     UC06["UC06: Gestionar Pre-orden y Carrito Aislado"]
-    UC07["UC07: Procesar Checkout Multimodal (Yape / Tarjeta / Efectivo)"]
-    UC08["UC08: Busqueda Predictiva ERP de Clientes en Mostrador"]
+    UC07["UC07: Procesar Checkout Multimodal (Yape / Tarjeta / Mostrador)"]
+    UC08["UC08: Busqueda Predictiva ERP y Alta Rotacion"]
     UC09["UC09: Emitir Comprobante (Boleta / Factura RUC)"]
     UC10["UC10: Administrar Kardex y Ajuste Fisico de Anaqueles"]
     UC11["UC11: Atender y Confirmar Despacho de Pedidos"]
-    UC12["UC12: Configuracion de Perfil y Acceso Biometrico"]
+    UC12["UC12: Editar Perfil, DNI/RUC y Cambio de Clave"]
+    UC13["UC13: Consultar Reportes, Filtros y CRUD de Catalogo"]
+    UC14["UC14: Administrar Usuarios, Roles RBAC y Bitacora"]
   end
 
   A1 --> UC01
@@ -112,11 +119,15 @@ flowchart LR
   A2 --> UC08
   A2 --> UC09
   A2 --> UC12
+  A2 --> UC13
 
   A3 --> UC01
+  A3 --> UC04
   A3 --> UC10
   A3 --> UC11
   A3 --> UC12
+  A3 --> UC13
+  A3 --> UC14
 
   UC02 -.-> A4
 ```
@@ -125,21 +136,23 @@ flowchart LR
 
 ### 3.2. Diagrama de Arquitectura de Capas y Componentes
 
-Ilustra la separación de responsabilidades bajo una arquitectura en capas desacoplada, donde la vista móvil consume servicios independientes y persiste de manera local y remota.
+Ilustra la separación de responsabilidades bajo una arquitectura en capas desacoplada sobre **Expo SDK 58**, donde la vista móvil consume servicios independientes de seguridad, autenticación y persistencia.
 
 ```mermaid
 flowchart TD
-  subgraph CapaPresentacion["Capa de Presentacion (React Native / Expo SDK 57)"]
-    NavStack["Navigation Container (Stack & Bottom Tabs Adaptables)"]
+  subgraph CapaPresentacion["Capa de Presentacion (React Native 0.88 / Expo SDK 58)"]
+    NavStack["AppNavigator & BottomTabNavigator (Enrutamiento Dinamico por Rol)"]
     subgraph Vistas["Pantallas (Screens)"]
       S_Login["LoginScreen"]
       S_Catalog["CatalogScreen"]
       S_Categories["CategoriesScreen"]
       S_Detail["DetailScreen"]
+      S_SavedFav["SavedFavoritesScreen (Favoritos / Alta Rotacion)"]
       S_Favorites["FavoritesScreen (Checkout & Mostrador)"]
+      S_Reports["ReportsScreen (Estadisticas, Filtros & CRUD)"]
       S_Stock["WarehouseStockScreen (Kardex)"]
       S_Dispatch["WarehouseDispatchScreen (Despacho)"]
-      S_Profile["ProfileScreen"]
+      S_Profile["ProfileScreen (Perfil, DNI/RUC & Admin Usuarios)"]
     end
     subgraph ComponentesUI["Componentes Reutilizables"]
       C_Img["ProductImage (Fallback Resiliente)"]
@@ -159,14 +172,15 @@ flowchart TD
     end
   end
 
-  subgraph CapaServicios["Capa de Servicios de Integracion"]
-    Srv_Auth["AuthService (Control RBAC, Hashes y OTP)"]
-    Srv_Storage["StorageService (Persistencia Aislada por Usuario)"]
+  subgraph CapaServicios["Capa de Servicios de Integracion y Seguridad"]
+    Srv_Auth["AuthService (Control RBAC, Login y OTP)"]
+    Srv_Sec["SecurityService (SHA-256 UTF-8, Tokens y Permisos)"]
+    Srv_Storage["StorageService (Persistencia Aislada y CRUD)"]
     Srv_Camera["CameraService (Sensores de Camara y Galeria)"]
   end
 
   subgraph CapaPersistencia["Capa de Persistencia y Backend"]
-    DB_Async["AsyncStorage (Almacenamiento Local Seguro en Dispositivo)"]
+    DB_Async["AsyncStorage (Almacenamiento Local en Dispositivo)"]
     Srv_SMTP["Microservicio Node.js Express (SMTP Nodemailer Port 3000)"]
   end
 
@@ -178,8 +192,10 @@ flowchart TD
   Vistas --> CapaServicios
 
   Ctx_Cart --> Srv_Storage
+  Srv_Auth --> Srv_Sec
   Srv_Auth --> Srv_Storage
   Srv_Auth --> Srv_SMTP
+  Srv_Storage --> Srv_Sec
   Srv_Storage --> DB_Async
 ```
 
@@ -192,7 +208,7 @@ Detalla las invocaciones sincronizadas y asíncronas para validar los datos fina
 ```mermaid
 sequenceDiagram
   autonumber
-  actor Usuario as "Usuario / Asesor"
+  actor Usuario as "Cliente / Asesor"
   participant UI as "FavoritesScreen (UI)"
   participant Val as "validators.ts"
   participant Ord as "orders.ts"
@@ -233,59 +249,59 @@ sequenceDiagram
 
 ---
 
-### 3.4. Diagrama de Secuencia: Autenticación, Verificación Regex y Recuperación SMTP
+### 3.4. Diagrama de Secuencia: Autenticación Criptográfica SHA-256 y Recuperación SMTP
 
-Describe el ciclo de vida del inicio de sesión institucional y la recuperación de clave mediante código de un solo uso (OTP) despachado por el microservicio de correos.
+Describe el ciclo de vida del inicio de sesión mediante firma SHA-256, generación de token cifrado de sesión y recuperación de clave mediante código OTP.
 
 ```mermaid
 sequenceDiagram
   autonumber
-  actor Colaborador as "Colaborador / Cliente"
+  actor Usuario as "Usuario / Colaborador"
   participant Login as "LoginScreen"
   participant Auth as "AuthService"
+  participant Sec as "SecurityService"
   participant Storage as "StorageService"
   participant SMTP as "Servidor Node.js (Express/Nodemailer)"
 
-  alt Flujo 1: Inicio de Sesion Regular
-    Colaborador->>Login: Ingresa usuario/correo y contrasena
+  alt Flujo 1: Inicio de Sesion Criptografico
+    Usuario->>Login: Ingresa usuario/correo y contrasena
     Login->>Auth: login(identificador, password)
     Auth->>Storage: getUsuarios()
-    Storage-->>Auth: Retorna usuarios registrados en el sistema
-    Auth->>Auth: Valida coincidencia de credenciales
-    alt Credenciales validas
-      Auth->>Storage: saveSesion(usuarioEncontrado)
+    Storage-->>Auth: Retorna usuarios registrados y sincronizados
+    Auth->>Sec: verifyPassword(password, user.passwordHash, user.password)
+    Sec-->>Auth: Resultado booleano de verificacion SHA-256
+    alt Credenciales validas y cuenta Activa
+      Auth->>Sec: createEncryptedSessionToken(userId, username, rol)
+      Sec-->>Auth: Retorna sessionToken cifrado
+      Auth->>Storage: saveSesion(usuarioAutenticado)
       Auth-->>Login: Retorna { success: true, user }
-      Login-->>Colaborador: Conmuta navegacion al Rol correspondiente
-    else Credenciales invalidas
-      Auth-->>Login: Retorna { success: false, message: "Contrasena incorrecta" }
-      Login-->>Colaborador: Despliega alerta de autenticacion fallida
+      Login-->>Usuario: Redirige al panel segun Rol (Cliente / Asesor / Administrador)
+    else Credenciales invalidas o cuenta Inactiva
+      Auth-->>Login: Retorna { success: false, message }
+      Login-->>Usuario: Muestra aviso de credenciales o estado de cuenta
     end
 
   else Flujo 2: Recuperacion de Contrasena con Codigo OTP
-    Colaborador->>Login: Selecciona "Olvide mi contrasena" e ingresa correo
+    Usuario->>Login: Selecciona "Olvide mi contrasena" e ingresa correo
     Login->>Auth: sendResetCode(email)
     Auth->>Auth: Genera codigo aleatorio de 6 digitos (expira en 15 min)
     Auth->>SMTP: POST /api/send-reset-code { email, code, userName }
     SMTP-->>Auth: HTTP 200 { success: true, message: "Correo despachado" }
     Auth-->>Login: Codigo enviado exitosamente
-    Login-->>Colaborador: Solicita ingreso de OTP y nueva contrasena
+    Login-->>Usuario: Solicita ingreso de OTP y nueva contrasena
 
-    Colaborador->>Login: Ingresa codigo OTP y nueva clave
-    Login->>Auth: verifyResetCode(email, code)
-    alt Codigo OTP correcto
-      Login->>Auth: updatePassword(userId, currentPass, newPass)
-      Auth->>Auth: validateStrongPassword(newPass) con Regex
-      alt Nueva clave cumple politica estricta (Regex 8+ chars)
-        Auth->>Storage: saveUsuario(usuarioActualizado)
-        Auth-->>Login: Retorna confirmacion de actualizacion
-        Login-->>Colaborador: Notifica exito y permite iniciar sesion
-      else Nueva clave no cumple politica
-        Auth-->>Login: Retorna error especifico de formato
-        Login-->>Colaborador: Solicita clave con mayuscula, numero y simbolo
-      end
-    else Codigo OTP invalido o vencido
-      Auth-->>Login: Retorna error de validacion OTP
-      Login-->>Colaborador: Rechaza operacion
+    Usuario->>Login: Ingresa codigo OTP y nueva clave
+    Login->>Auth: resetPasswordWithCode(email, code, newPass)
+    Auth->>Auth: validateStrongPassword(newPass) con Regex
+    alt Codigo OTP valido y clave cumple Regex
+      Auth->>Sec: hashPassword(newPass)
+      Sec-->>Auth: Nuevo hash SHA-256
+      Auth->>Storage: saveUsuario(usuarioActualizado)
+      Auth-->>Login: Retorna confirmacion de actualizacion
+      Login-->>Usuario: Notifica exito y habilita inicio de sesion
+    else Codigo OTP invalido o clave debil
+      Auth-->>Login: Retorna error especifico de validacion
+      Login-->>Usuario: Rechaza operacion e informa motivo
     end
   end
 ```
@@ -294,7 +310,7 @@ sequenceDiagram
 
 ### 3.5. Diagrama de Clases del Dominio
 
-Estructura de clases, interfaces, tipos enumerados y dependencias que conforman el modelo de dominio en TypeScript estricto.
+Estructura de clases, interfaces, tipos enumerados y servicios que conforman el modelo de dominio en TypeScript estricto.
 
 ```mermaid
 classDiagram
@@ -302,7 +318,7 @@ classDiagram
     <<enumeration>>
     Cliente
     Asesor
-    Almacenero
+    Administrador
   }
 
   class CategoriaRepuesto {
@@ -327,11 +343,16 @@ classDiagram
     +string username
     +string email
     +string password
+    +string passwordHash
     +RolUsuario rol
     +string sede
     +string telefono
+    +string documentoIdentidad
+    +string direccion
     +string fotoPerfilUri
     +boolean biometricsEnabled
+    +string estadoCuenta
+    +string sessionToken
   }
 
   class Repuesto {
@@ -373,21 +394,28 @@ classDiagram
     +string numOperacion
   }
 
+  class SecurityService {
+    <<utility>>
+    +hashPassword(plain: string) string
+    +verifyPassword(plain: string, hash: string) boolean
+    +createEncryptedSessionToken(id, user, rol) string
+    +validateSessionToken(token: string) SessionValidation
+    +getRolePermissions(rol: RolUsuario) RolePermissionMatrix
+    +hasPermission(rol: RolUsuario, perm: string) boolean
+  }
+
   class StorageService {
     <<utility>>
     +getUsuarios() Promise~Usuario[]~
     +saveUsuario(u: Usuario) Promise~void~
-    +getSesion() Promise~Usuario~
-    +saveSesion(u: Usuario) Promise~void~
-    +getFavoritos() Promise~Repuesto[]~
-    +saveFavoritos(f: Repuesto[]) Promise~void~
-    +getCarrito() Promise~ItemCarrito[]~
-    +saveCarrito(c: ItemCarrito[]) Promise~void~
-    +getStockOverrides() Promise~Record~
-    +setStockItem(id: string, s: number) Promise~void~
+    +updateRolUsuario(id: string, r: RolUsuario) Promise~Usuario~
+    +cambiarEstadoCuentaUsuario(id: string, e: string) Promise~Usuario~
+    +restaurarUsuariosPorDefecto() Promise~Usuario[]~
+    +getCatalogoCompleto() Promise~Repuesto[]~
+    +saveRepuestoCatalogo(r: Repuesto) Promise~Repuesto[]~
+    +deleteRepuestoCatalogo(id: string) Promise~Repuesto[]~
     +getHistorialPedidos() Promise~PedidoLocal[]~
     +savePedidoEnHistorial(p: PedidoLocal) Promise~void~
-    +updatePedidoEstado(id: string, e: EstadoPedido) Promise~void~
   }
 
   class AuthService {
@@ -395,7 +423,7 @@ classDiagram
     +login(identificador, pass) Promise~AuthResult~
     +register(datos) Promise~AuthResult~
     +sendResetCode(email) Promise~AuthResult~
-    +verifyResetCode(email, code) Promise~AuthResult~
+    +resetPasswordWithCode(email, code, newPass) Promise~AuthResult~
     +updatePassword(id, oldPass, newPass) Promise~AuthResult~
     +validateStrongPassword(pass) PasswordValidation
   }
@@ -406,6 +434,7 @@ classDiagram
   StorageService ..> Usuario : persiste
   StorageService ..> PedidoLocal : persiste
   StorageService ..> Repuesto : persiste
+  AuthService ..> SecurityService : cifra y verifica
   AuthService ..> Usuario : autentica y autoriza
 ```
 
@@ -420,6 +449,7 @@ erDiagram
   USUARIO ||--o{ PEDIDO : "emite / registra"
   USUARIO ||--o{ FAVORITO : "marca como favorito"
   USUARIO ||--o{ ITEM_CARRITO : "mantiene activo"
+  USUARIO ||--o{ BITACORA_ACTIVIDAD : "genera evento"
   PEDIDO ||--|{ DETALLE_PEDIDO : "contiene"
   REPUESTO ||--o{ DETALLE_PEDIDO : "es referenciado en"
   REPUESTO ||--o{ FAVORITO : "es seleccionado en"
@@ -430,11 +460,14 @@ erDiagram
     string id PK
     string username UK
     string email UK
-    string password
+    string passwordHash
     string nombreCompleto
     string rol
     string sede
     string telefono
+    string documentoIdentidad
+    string direccion
+    string estadoCuenta
     string fotoPerfilUri
     boolean biometricsEnabled
   }
@@ -497,6 +530,15 @@ erDiagram
     int stockFisico
     string ultimaActualizacion
   }
+
+  BITACORA_ACTIVIDAD {
+    string id PK
+    string fecha
+    string usuario
+    string rol
+    string accion
+    string detalle
+  }
 ```
 
 ---
@@ -541,7 +583,7 @@ stateDiagram-v2
 
 ### 3.8. Diagrama de Estados de Sesión y Control de Acceso basado en Roles (RBAC)
 
-Modela el ciclo de vida de la sesión de usuario y la segregación estricta de navegación según el rol asignado.
+Modela el ciclo de vida de la sesión de usuario y la segregación estricta de navegación según el rol asignado (`Cliente`, `Asesor`, `Administrador`).
 
 ```mermaid
 stateDiagram-v2
@@ -555,33 +597,34 @@ stateDiagram-v2
     ValidandoCredenciales --> FormularioLogin : Error en credenciales
   }
 
-  ValidandoCredenciales --> SesionActiva : Credenciales Correctas
+  ValidandoCredenciales --> SesionActiva : Firma SHA-256 Valida
 
   state SesionActiva {
     [*] --> SegmentacionRoles
 
     state "Flujo Cliente" as RolCliente {
       CatalogoCliente --> FichaDetalle
-      FichaDetalle --> PreOrdenCliente
+      FichaDetalle --> FavoritosCliente
+      FavoritosCliente --> PreOrdenCliente
       PreOrdenCliente --> PasarelaPago
-      PasarelaPago --> HistorialCliente
+      PasarelaPago --> PerfilTributarioCliente
     }
 
     state "Flujo Asesor (Ventas / ERP)" as RolAsesor {
-      MostradorComercial --> BusquedaPredictivaClientes
-      BusquedaPredictivaClientes --> CotizadorMostrador
-      CotizadorMostrador --> MetricasComerciales
+      MostradorComercial --> RepuestosAltaRotacion
+      RepuestosAltaRotacion --> CotizadorMostradorERP
+      CotizadorMostradorERP --> ReportesYEstadisticas
     }
 
-    state "Flujo Almacenero (Kardex & Logistica)" as RolAlmacenero {
-      ControlAnaqueles --> AjusteKardexFisico
-      AjusteKardexFisico --> BandejaDespacho
-      BandejaDespacho --> ConfirmacionEntrega
+    state "Flujo Administrador (Control Total)" as RolAdministrador {
+      ControlAnaquelesKardex --> BandejaDespacho
+      BandejaDespacho --> ReportesYCatalogoCRUD
+      ReportesYCatalogoCRUD --> GestionUsuariosYRoles
     }
 
     SegmentacionRoles --> RolCliente : rol == 'Cliente'
     SegmentacionRoles --> RolAsesor : rol == 'Asesor'
-    SegmentacionRoles --> RolAlmacenero : rol == 'Almacenero'
+    SegmentacionRoles --> RolAdministrador : rol == 'Administrador'
   }
 
   SesionActiva --> NoAutenticado : Accion "Cerrar Sesion" (StorageService.clearSesion)
@@ -595,7 +638,7 @@ Especifica la lógica de negocio para la gestión física de existencias y la ac
 
 ```mermaid
 flowchart TD
-  A1(["Inicio: Consulta de Inventario / Kardex"]) --> A2["Consultar catalogo de 46 piezas OEM"]
+  A1(["Inicio: Consulta de Inventario / Kardex"]) --> A2["Consultar catalogo OEM + items personalizados"]
   A2 --> A3{"Existe anulacion en stockOverrides?"}
   A3 -- "Si" --> A4["Cargar cantidad ajustada desde AsyncStorage"]
   A3 -- "No" --> A5["Cargar cantidad nominal base de repuestos.mock.ts"]
@@ -613,7 +656,7 @@ flowchart TD
   A11 --> A12
 
   A12 -- "Venta confirmada en tienda" --> A13["Restar unidades vendidas del anaquel"]
-  A12 -- "Conteo fisico manual" --> A14["Ingresar valor absoluto verificado por almacenero"]
+  A12 -- "Conteo fisico manual" --> A14["Ingresar valor absoluto verificado por Administrador"]
   A12 -- "Recepcion por Guia de Remision" --> A15["Incrementar saldo (+delta)"]
 
   A13 --> A16["Ejecutar StorageService.setStockItem(repuestoId, nuevoStock)"]
@@ -621,7 +664,7 @@ flowchart TD
   A15 --> A16
 
   A16 --> A17["Persistir mapa en AsyncStorage ('@hurios_stock_overrides')"]
-  A17 --> A18["Emitir actualizacion reactiva a Catalogo, Kardex y Perfil"]
+  A17 --> A18["Emitir actualizacion reactiva a Catalogo, Kardex, Reportes y Perfil"]
   A18 --> A19(["Fin de la Operacion de Kardex"])
 ```
 
@@ -629,40 +672,44 @@ flowchart TD
 
 ## 4. Matriz de Roles y Control de Acceso (RBAC)
 
-El sistema implementa una matriz de privilegios basada en perfiles para garantizar la integridad operativa:
+El sistema implementa una matriz de privilegios gestionada por `SecurityService.ts` y aplicada en la navegación e interfaces de usuario:
 
-| Operación / Vista del Sistema | Cliente | Asesor de Ventas | Almacenero |
+| Operación / Vista del Sistema | Cliente | Asesor de Ventas | Administrador |
 | :--- | :---: | :---: | :---: |
-| **Exploración de Catálogo y Búsqueda OEM** | Sí | Sí | No |
-| **Inspección de Piezas con Cámara / Galería** | Sí | Sí | No |
-| **Generación de Pre-orden y Lista de Deseos** | Sí | Sí | No |
-| **Checkout Multimodal (Yape, Tarjeta, Mostrador)** | Sí | Sí | No |
-| **Buscador Predictivo de Clientes Registrados (ERP)** | No | Sí | No |
-| **Emisión de Cotizaciones en Mostrador con RUC** | No | Sí | No |
-| **Visualización de Métricas de Venta y Proformas** | No | Sí | No |
+| **Exploración de Catálogo y Búsqueda OEM** | Sí | Sí | Sí |
+| **Inspección de Piezas con Cámara / Galería** | Sí | Sí | Sí |
+| **Lista Personal de Favoritos** | Sí | No | No |
+| **Catálogo Rápido de Repuestos de Alta Rotación** | No | Sí | No |
+| **Generación de Pre-orden y Checkout Multimodal** | Sí | Sí | No |
+| **Registro de DNI / RUC y Dirección en Perfil** | Sí | No | No |
+| **Buscador Predictivo de Clientes Registrados (ERP)** | No | Sí | Sí |
+| **Emisión de Cotizaciones en Mostrador con RUC** | No | Sí | Sí |
+| **Reportes Estadísticos, Filtros y Mantenimiento CRUD** | No | Sí | Sí |
 | **Inventario Físico de Anaqueles y Kardex Sede SMP** | No | No | Sí |
-| **Ajuste Manual e Incremental de Stock Físico** | No | No | Sí |
-| **Bandeja de Despacho y Marcado de Pedidos Entregados** | No | No | Sí |
-| **Configuración de Perfil y Acceso Biométrico** | Sí | Sí | Sí |
+| **Bandeja de Despacho y Entrega de Pedidos** | No | No | Sí |
+| **Gestión de Usuarios, Asignación de Roles y Restauración** | No | No | Sí |
+| **Bitácora de Actividad del Sistema** | No | No | Sí |
+| **Cambio de Contraseña (con vista de clave) y Biometría** | Sí | Sí | Sí |
 
 ---
 
 ## 5. Cuentas Maestras del Sistema y Credenciales de Evaluación
 
-Para auditorías académicas y pruebas de evaluación, el archivo `StorageService.ts` auto-inicializa tres cuentas maestras predeterminadas. Los botones de acceso rápido en el `LoginScreen` cargan sus credenciales con un solo toque:
+Para auditorías académicas y pruebas de evaluación, el archivo [`StorageService.ts`](file:///d:/Workspace/utp/hurios-rally-app/src/services/StorageService.ts) inicializa y sincroniza automáticamente las cuentas maestras predeterminadas. Los botones de acceso rápido en [`LoginScreen.tsx`](file:///d:/Workspace/utp/hurios-rally-app/src/screens/LoginScreen.tsx) permiten cargar las tres cuentas principales con un solo toque:
 
 | N° | Rol | Nombre Completo | Usuario (`username`) | Correo Corporativo | Contraseña Institucional | Sede Operativa |
 | :---: | :--- | :--- | :--- | :--- | :---: | :--- |
 | **1** | **Cliente** | Carlos Mendoza Silva | `carlos_mendoza` | `carlos_mendoza.cliente@huriosrally.com` | `Hurios@2026` | Lima Norte / SMP (Sede Central) |
 | **2** | **Asesor** | Edu Morales Carlos | `edu_morales` | `edu_morales.ventas@huriosrally.com` | `Hurios@2026` | Lima Norte / SMP (Sede Central) |
-| **3** | **Almacenero** | Raúl Quispe Huamán | `raul_quispe` | `raul_quispe.almacen@huriosrally.com` | `Hurios@2026` | Almacén Central / Despacho SMP |
+| **3** | **Administrador** | Raúl Quispe Huamán | `raul_quispe` | `raul_quispe.almacen@huriosrally.com` | `Hurios@2026` | Almacén Central / Despacho SMP |
+| **4** | **Administrador** | Edu Morales | `admin_rally` | `ventas@huriosrally.com` | `Hurios@2026` | Lima Norte / SMP (Sede Central) |
 
-> **Directriz de Seguridad (Regex Estricto):**  
+> **Directriz de Seguridad (Regex Estricto + Firma SHA-256):**  
 > Todas las contraseñas del sistema deben superar la regla de validación de complejidad:  
 > `^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*(),.?":{}|<>_\-]).{8,}$`  
-> (Mínimo 8 caracteres, 1 mayúscula, 1 minúscula, 1 número y 1 símbolo).
+> (Mínimo 8 caracteres, 1 mayúscula, 1 minúscula, 1 número y 1 símbolo) y se almacenan firmadas bajo formato `sha256$hr2026$<digest>`.
 >
-> Para acceder al banco de datos con 5 usuarios de prueba listos para registro y casos de prueba detallados, consulte la [Guía de Pruebas de Usuarios](docs/pruebas_usuarios.md).
+> Para acceder al banco de datos con usuarios de prueba adicionales y casos de validación detallados, consulte la [Guía de Pruebas de Usuarios](docs/pruebas_usuarios.md).
 
 ---
 
@@ -670,13 +717,14 @@ Para auditorías académicas y pruebas de evaluación, el archivo `StorageServic
 
 | Componente | Tecnología | Versión | Propósito en el Proyecto |
 | :--- | :--- | :---: | :--- |
-| **Núcleo Móvil** | React Native | 0.86.3 | Framework de renderizado nativo declarativo |
-| **Plataforma SDK** | Expo | 57.0.24 | Entorno de empaquetado, sensores y runtime |
-| **Tipado Estricto** | TypeScript | 6.0.3 | Tipado estático y compilación segura en todo el codebase |
-| **Enrutamiento** | React Navigation | 7.0.14 | Navegación nativa por Stack y Bottom Tabs dinámicas |
+| **Núcleo Móvil** | React Native | 0.88.1 | Framework de renderizado nativo multiplataforma |
+| **Plataforma SDK** | Expo | 58.0.22 | Entorno de ejecución, sensores y compatibilidad con Expo Go SDK 58 |
+| **Motor UI** | React | 19.3.0 | Librería reactiva de componentes y hooks de estado |
+| **Tipado Estricto** | TypeScript | 6.0.3 | Tipado estático y compilación segura en todo el proyecto |
+| **Enrutamiento** | React Navigation | 7.0.14 | Navegación nativa por Stack y Bottom Tabs adaptables por rol |
 | **Persistencia Local** | AsyncStorage | 2.2.0 | Almacenamiento clave-valor asíncrono y desacoplado |
-| **Cámara & Galería** | Expo Camera / ImagePicker | 57.0.x | Captura de evidencias de piezas automotrices |
-| **Iconografía** | Expo Vector Icons (Ionicons) | 15.0.2 | Simbología vectorial técnica estandarizada |
+| **Cámara & Galería** | Expo Camera / ImagePicker | 58.0.x | Captura de fotografías para repuestos y perfiles |
+| **Iconografía** | Expo Vector Icons (Ionicons) | 15.0.2 | Simbología vectorial estándar de interfaz |
 | **Servidor SMTP** | Node.js / Express | 18+ | Microservicio REST para despacho de códigos OTP |
 | **Cliente de Correo** | Nodemailer | 6.9.x | Envío seguro de plantillas HTML transaccionales |
 
@@ -686,13 +734,13 @@ Para auditorías académicas y pruebas de evaluación, el archivo `StorageServic
 
 ```text
 hurios-rally-app/
-├── assets/                          # Logotipos corporativos y assets gráficos
+├── assets/                          # Logotipos corporativos y recursos gráficos
 ├── docs/                            # Documentación formal de ingeniería y pruebas
 │   ├── diagramas_ingenieria.md      # Especificación completa de diagramas UML
 │   └── pruebas_usuarios.md          # Protocolos de prueba y banco de usuarios
 ├── server/                          # Microservicio backend SMTP (Node.js Express)
 │   ├── package.json                 # Dependencias del servidor de correos
-│   └── server.js                    # Endpoints /api/send-reset-code y salud
+│   └── server.js                    # Endpoints /api/send-reset-code y estado de salud
 ├── src/
 │   ├── components/                  # Componentes reutilizables modulares
 │   │   ├── CardRepuesto.tsx         # Tarjeta de pieza con precio, OEM y stock
@@ -705,33 +753,37 @@ hurios-rally-app/
 │   │   └── repuestos.mock.ts        # Catálogo canónico de 46 piezas OEM
 │   ├── hooks/
 │   │   └── useDebouncedValue.ts     # Hook de optimización de búsquedas (180ms)
-│   ├── navigation/
-│   │   └── RootNavigator.tsx        # Orquestación de navegación condicionada por rol
+│   ├── navigation/                  # Orquestación de navegación condicionada por rol
+│   │   ├── AppNavigator.tsx         # Stack principal, menú lateral y modales corporativos
+│   │   ├── BottomTabNavigator.tsx   # Pestañas inferiores dinámicas según rol RBAC
+│   │   └── types.ts                 # Definición de rutas y parámetros de navegación
 │   ├── screens/                     # Pantallas del sistema por actor
 │   │   ├── CatalogScreen.tsx        # Catálogo general con búsqueda debounced
 │   │   ├── CategoriesScreen.tsx     # Explorador de familias de repuestos
 │   │   ├── DetailScreen.tsx         # Ficha técnica, compatibilidad e inspección
 │   │   ├── FavoritesScreen.tsx      # Pre-orden, checkout y mostrador comercial
 │   │   ├── LoginScreen.tsx          # Autenticación, registro y recuperación OTP
-│   │   ├── ProfileScreen.tsx        # Auditoría de cuenta, biometría y métricas
-│   │   ├── SavedFavoritesScreen.tsx # Lista personal de piezas destacadas
+│   │   ├── ProfileScreen.tsx        # Perfil, DNI/RUC, cambio de clave y gestión admin
+│   │   ├── ReportsScreen.tsx        # Estadísticas financieras, filtros y CRUD de catálogo
+│   │   ├── SavedFavoritesScreen.tsx # Favoritos de cliente y repuestos de alta rotación
 │   │   ├── WarehouseDispatchScreen.tsx # Monitoreo y despacho de pedidos
 │   │   └── WarehouseStockScreen.tsx # Kardex físico y control de anaqueles
-│   ├── services/                    # Capa de infraestructura y acceso a datos
-│   │   ├── AuthService.ts           # Lógica de login, hashes, OTP y Regex
-│   │   ├── CameraService.ts         # Integración nativa con cámara y álbum
-│   │   └── StorageService.ts        # Abstracción de persistencia con AsyncStorage
+│   ├── services/                    # Capa de infraestructura, seguridad y datos
+│   │   ├── AuthService.ts           # Lógica de login, registro, OTP y validación Regex
+│   │   ├── CameraService.ts         # Integración nativa con cámara y galería
+│   │   ├── SecurityService.ts       # Motor SHA-256 UTF-8, tokens de sesión y matriz RBAC
+│   │   └── StorageService.ts        # Persistencia en AsyncStorage, CRUD y restauración
 │   ├── theme/
-│   │   └── colors.ts                # Paleta de colores institucionales de Rally
+│   │   └── colors.ts                # Paleta de colores institucionales de Hurios Rally
 │   ├── types/
 │   │   └── index.ts                 # Contratos, interfaces y tipos TypeScript
-│   └── utils/                       # Utilidades puras de lógica matemática
+│   └── utils/                       # Utilidades puras de lógica de negocio
 │       ├── catalog.ts               # Cálculos de stock, filtros y normalización
 │       ├── orders.ts                # Generador de correlativos PED-XXXX y KPI
 │       └── validators.ts            # Validadores de Regex, tarjetas y comprobantes
 ├── App.tsx                          # Punto de entrada principal y proveedores
 ├── app.json                         # Manifiesto de configuración de Expo
-├── package.json                     # Declaración de dependencias de la app móvil
+├── package.json                     # Declaración de dependencias (Expo SDK 58)
 └── tsconfig.json                    # Reglas del compilador TypeScript
 ```
 
@@ -740,10 +792,10 @@ hurios-rally-app/
 ## 8. Guía de Instalación, Configuración y Despliegue
 
 ### Requisitos Previos del Entorno
-- **Node.js**: Versión 18.x LTS o superior.
+- **Node.js**: Versión 18.x LTS, 20.x o 22.x.
 - **npm**: Versión 9.x o superior.
 - **Dispositivo Físico o Emulador**:
-  - Dispositivo móvil Android/iOS con la aplicación **Expo Go** instalada.
+  - Dispositivo móvil Android/iOS con la aplicación **Expo Go (SDK 58)** instalada.
   - O emulador Android Studio / Xcode configurado en el sistema anfitrión.
 
 ### Paso 1: Clonar el Repositorio
@@ -761,7 +813,7 @@ npm install
 ```bash
 npx tsc --noEmit
 ```
-*(Debe retornar código de salida `0` sin advertencias).*
+*(Debe retornar código de salida `0` sin errores de compilación).*
 
 ### Paso 4: Iniciar el Servidor de Desarrollo Expo
 ```bash
@@ -783,12 +835,12 @@ El servidor quedará a la escucha en el puerto `3000` con el endpoint de salud `
 
 ## 9. Ciclo de Vida del Software y Control de Versiones
 
-El desarrollo del proyecto se rige estrictamente por la metodología **GitFlow** y la especificación de **Commits Convencionales**:
+El desarrollo del proyecto se rige por la metodología **GitFlow** y la especificación de **Commits Convencionales**:
 
 - **Rama `main`**: Contiene exclusivamente versiones estables aprobadas para pase a producción (Releases oficiales).
-- **Rama `dev`**: Rama troncal de integración continua donde se consolidan los módulos probados.
-- **Ramas `feature/*`**: Ramas atómicas de desarrollo por capacidad funcional (ej. `feature/app-optimization-and-clean-ui`, `feature/auth-security-and-cart-isolation`).
-- **Ramas `fix/*`**: Correcciones quirúrgicas de bugs detectados durante pruebas de integración.
+- **Rama `dev`**: Rama troncal de integración continua donde se consolidan los módulos verificados.
+- **Ramas `feature/*`**: Ramas atómicas de desarrollo por capacidad funcional (ej. `feature/avance-3-roles-reportes-seguridad`).
+- **Ramas `fix/*`**: Correcciones puntuales de defectos detectados durante pruebas de integración.
 
 ### Estándar de Mensajes de Confirmación (Commits)
 - `feat(modulo): descripcion en espanol del nuevo requerimiento`
