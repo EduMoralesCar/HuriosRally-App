@@ -4,6 +4,7 @@ export type RootStackParamList = {
   Login: undefined;
   Main: undefined;
   Detail: { repuesto: Repuesto };
+  Reports: undefined;
 };
 
 export type BottomTabParamList = {
@@ -11,5 +12,6 @@ export type BottomTabParamList = {
   CategoriasTab: undefined;
   FavoritosTab: undefined;
   PreOrdenTab: undefined;
+  ReportesTab: undefined;
   PerfilTab: undefined;
 };
