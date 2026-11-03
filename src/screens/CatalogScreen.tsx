@@ -31,7 +31,7 @@ interface Props {
 type OrdenCatalogo = 'relevancia' | 'precio_asc' | 'precio_desc' | 'rating';
 
 const OPCIONES_ORDEN: { id: OrdenCatalogo; label: string; icon: keyof typeof Ionicons.glyphMap }[] = [
-  { id: 'relevancia', label: 'Destacados', icon: 'sparkles-outline' },
+  { id: 'relevancia', label: 'Destacados', icon: 'pricetag-outline' },
   { id: 'precio_asc', label: 'Menor precio', icon: 'arrow-down-outline' },
   { id: 'precio_desc', label: 'Mayor precio', icon: 'arrow-up-outline' },
   { id: 'rating', label: 'Mejor valorados', icon: 'star-outline' },
@@ -39,6 +39,7 @@ const OPCIONES_ORDEN: { id: OrdenCatalogo; label: string; icon: keyof typeof Ion
 
 export const CatalogScreen: React.FC<Props> = ({ navigation, onLogout }) => {
   const [currentUser, setCurrentUser] = useState<Usuario | null>(null);
+  const [catalogoRepuestos, setCatalogoRepuestos] = useState<Repuesto[]>(REPUESTOS_MOCK);
   const [search, setSearch] = useState('');
   const debouncedSearch = useDebouncedValue(search, 180);
   const [category, setCategory] = useState<CategoriaRepuesto>('Todos');
@@ -58,16 +59,18 @@ export const CatalogScreen: React.FC<Props> = ({ navigation, onLogout }) => {
   const { totalCount, addToCart } = useCart();
 
   const sincronizarDatos = useCallback(async () => {
-    const [sesion, favs, pedidos, overrides] = await Promise.all([
+    const [sesion, favs, pedidos, overrides, catalogo] = await Promise.all([
       StorageService.getSesion(),
       StorageService.getFavoritos(),
       StorageService.getHistorialPedidos(),
       StorageService.getStockOverrides(),
+      StorageService.getCatalogoRepuestos(),
     ]);
     if (sesion) setCurrentUser(sesion);
     setFavoritosIds(favs.map((f) => f.id));
     setHistorialPedidos(pedidos);
     setStockOverrides(overrides);
+    setCatalogoRepuestos(catalogo);
   }, []);
 
   useEffect(() => {
@@ -120,7 +123,7 @@ export const CatalogScreen: React.FC<Props> = ({ navigation, onLogout }) => {
 
   const repuestosFiltrados = useMemo(() => {
     const query = normalizarTexto(debouncedSearch);
-    const filtrados = REPUESTOS_MOCK.filter((rep) => {
+    const filtrados = catalogoRepuestos.filter((rep) => {
       const matchesCategory = category === 'Todos' || rep.categoria === category;
       if (!matchesCategory) return false;
       if (!query) return true;
@@ -142,7 +145,7 @@ export const CatalogScreen: React.FC<Props> = ({ navigation, onLogout }) => {
       return [...filtrados].sort((a, b) => (b.rating || 4.8) - (a.rating || 4.8));
     }
     return filtrados;
-  }, [category, debouncedSearch, orden]);
+  }, [catalogoRepuestos, category, debouncedSearch, orden]);
 
   const pedidosVisibles = useMemo(
     () => filtrarPedidosPorUsuario(historialPedidos, currentUser),
@@ -329,9 +332,9 @@ export const CatalogScreen: React.FC<Props> = ({ navigation, onLogout }) => {
               <Text style={styles.drawerSectionTitle}>
                 {currentUser?.rol === 'Asesor'
                   ? 'OPERACIONES DE MOSTRADOR'
-                  : currentUser?.rol === 'Almacenero'
-                  ? 'SERVICIOS DE ALMACÉN'
-                  : 'SERVICIOS AL CLIENTE'}
+                  : currentUser?.rol === 'Administrador' || currentUser?.rol === 'Almacenero'
+                  ? 'PANEL DE ADMINISTRACIÓN'
+                  : 'NAVEGACIÓN'}
               </Text>
 
               <TouchableOpacity
@@ -343,7 +346,7 @@ export const CatalogScreen: React.FC<Props> = ({ navigation, onLogout }) => {
               >
                 <Ionicons name="grid-outline" size={20} color="#0066FF" />
                 <Text style={styles.drawerItemText}>
-                  {currentUser?.rol === 'Asesor' ? 'Familias de Repuestos' : 'Catálogo por Familias'}
+                  {currentUser?.rol === 'Asesor' ? 'Familias de Repuestos' : 'Catálogo por Categorías'}
                 </Text>
               </TouchableOpacity>
 
@@ -360,7 +363,7 @@ export const CatalogScreen: React.FC<Props> = ({ navigation, onLogout }) => {
                   color="#EF4444"
                 />
                 <Text style={styles.drawerItemText}>
-                  {currentUser?.rol === 'Asesor' ? 'Repuestos de Alta Rotación' : 'Mis Repuestos Guardados'}
+                  {currentUser?.rol === 'Asesor' ? 'Repuestos de Alta Rotación' : 'Mis Repuestos Favoritos'}
                 </Text>
               </TouchableOpacity>
 
@@ -375,10 +378,23 @@ export const CatalogScreen: React.FC<Props> = ({ navigation, onLogout }) => {
                 <Ionicons name="receipt-outline" size={20} color="#10B981" />
                 <Text style={styles.drawerItemText}>
                   {currentUser?.rol === 'Asesor'
-                    ? 'Historial de Cotizaciones y Ventas'
+                    ? 'Historial de Cotizaciones'
                     : 'Mis Pedidos y Compras'}
                 </Text>
               </TouchableOpacity>
+
+              {(currentUser?.rol === 'Administrador' || currentUser?.rol === 'Almacenero') && (
+                <TouchableOpacity
+                  style={styles.drawerItem}
+                  onPress={() => {
+                    setShowMenuModal(false);
+                    navigation.navigate('Reports');
+                  }}
+                >
+                  <Ionicons name="bar-chart-outline" size={20} color="#7C3AED" />
+                  <Text style={styles.drawerItemText}>Reportes y Gestión de Catálogo</Text>
+                </TouchableOpacity>
+              )}
 
               <Text style={styles.drawerSectionTitle}>ATENCIÓN Y CONTACTO</Text>
 
@@ -390,7 +406,7 @@ export const CatalogScreen: React.FC<Props> = ({ navigation, onLogout }) => {
                 }}
               >
                 <Ionicons name="call-outline" size={20} color="#0066FF" />
-                <Text style={styles.drawerItemText}>Atención en Mostrador</Text>
+                <Text style={styles.drawerItemText}>Atención al Cliente</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
@@ -411,17 +427,11 @@ export const CatalogScreen: React.FC<Props> = ({ navigation, onLogout }) => {
                   navigation.navigate('PerfilTab');
                 }}
               >
-                <Ionicons name="person-circle-outline" size={20} color="#64748B" />
-                <Text style={styles.drawerItemText}>
-                  {currentUser?.rol === 'Asesor'
-                    ? 'Mi Perfil de Asesor'
-                    : currentUser?.rol === 'Almacenero'
-                    ? 'Mi Perfil de Almacenero'
-                    : 'Mi Perfil de Cliente'}
-                </Text>
+                <Ionicons name="person-outline" size={20} color="#64748B" />
+                <Text style={styles.drawerItemText}>Mi Perfil</Text>
               </TouchableOpacity>
 
-              <Text style={styles.drawerSectionTitle}>SESIÓN DE USUARIO</Text>
+              <Text style={styles.drawerSectionTitle}>CUENTA</Text>
 
               <TouchableOpacity
                 style={[styles.drawerItem, { borderBottomWidth: 0 }]}
@@ -438,8 +448,7 @@ export const CatalogScreen: React.FC<Props> = ({ navigation, onLogout }) => {
             </ScrollView>
 
             <View style={styles.drawerFooter}>
-              <Text style={styles.footerNote}>Sistema Móvil de Repuestos e Inventario</Text>
-              <Text style={styles.footerVersion}>Hurios Rally E.I.R.L. • v2.0.0</Text>
+              <Text style={styles.footerVersion}>Hurios Rally E.I.R.L.</Text>
             </View>
           </View>
         </View>
@@ -450,12 +459,12 @@ export const CatalogScreen: React.FC<Props> = ({ navigation, onLogout }) => {
         <View style={styles.popupBg}>
           <View style={styles.logoutCard}>
             <View style={styles.logoutIconCircle}>
-              <Ionicons name="log-out" size={32} color="#EF4444" />
+              <Ionicons name="log-out-outline" size={30} color="#EF4444" />
             </View>
 
-            <Text style={styles.logoutTitle}>¿Cerrar Sesión?</Text>
+            <Text style={styles.logoutTitle}>¿Cerrar sesión?</Text>
             <Text style={styles.logoutDesc}>
-              Se cerrará la sesión actual en este dispositivo. Podrás volver a ingresar en cualquier momento con tus credenciales.
+              ¿Estás seguro de que deseas salir de tu cuenta?
             </Text>
 
             <View style={styles.logoutButtonsRow}>
@@ -478,7 +487,7 @@ export const CatalogScreen: React.FC<Props> = ({ navigation, onLogout }) => {
                   }
                 }}
               >
-                <Text style={styles.logoutConfirmText}>Sí, Salir</Text>
+                <Text style={styles.logoutConfirmText}>Salir</Text>
               </TouchableOpacity>
             </View>
           </View>

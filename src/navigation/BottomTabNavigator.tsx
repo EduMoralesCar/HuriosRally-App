@@ -9,6 +9,7 @@ import { FavoritesScreen } from '../screens/FavoritesScreen';
 import { ProfileScreen } from '../screens/ProfileScreen';
 import { WarehouseDispatchScreen } from '../screens/WarehouseDispatchScreen';
 import { WarehouseStockScreen } from '../screens/WarehouseStockScreen';
+import { ReportsScreen } from '../screens/ReportsScreen';
 import { BottomTabParamList } from './types';
 import { useCart } from '../context/CartContext';
 import { StorageService } from '../services/StorageService';
@@ -38,7 +39,7 @@ export const BottomTabNavigator: React.FC<Props> = ({ onLogout, user }) => {
 
   const rolActivo = currentUser?.rol || user?.rol;
   const esAsesor = rolActivo === 'Asesor';
-  const esAlmacenero = rolActivo === 'Almacenero';
+  const esAdmin = rolActivo === 'Administrador' || rolActivo === 'Almacenero';
 
   return (
     <Tab.Navigator
@@ -60,17 +61,15 @@ export const BottomTabNavigator: React.FC<Props> = ({ onLogout, user }) => {
         },
       }}
     >
-      {/* SI EL USUARIO ES ALMACENERO: VISTA EXCLUSIVA DE ALMACÉN */}
-      {esAlmacenero ? (
+      {esAdmin ? (
         <>
-          {/* 1. Despachos y Órdenes por Entregar */}
           <Tab.Screen
             name="InicioTab"
             component={WarehouseDispatchScreen}
             options={{
               tabBarLabel: ({ color, focused }) => (
                 <View style={{ alignItems: 'center' }}>
-                  <Text style={{ color, fontSize: 11, fontWeight: '700' }}>Despachos</Text>
+                  <Text style={{ color, fontSize: 11, fontWeight: '700' }}>Pedidos</Text>
                   {focused && <View style={[styles.activeIndicator, { backgroundColor: '#059669' }]} />}
                 </View>
               ),
@@ -78,14 +77,13 @@ export const BottomTabNavigator: React.FC<Props> = ({ onLogout, user }) => {
             }}
           />
 
-          {/* 2. Control de Stock e Inventario Kardex */}
           <Tab.Screen
             name="PreOrdenTab"
             component={WarehouseStockScreen}
             options={{
               tabBarLabel: ({ color, focused }) => (
                 <View style={{ alignItems: 'center' }}>
-                  <Text style={{ color, fontSize: 11, fontWeight: '700' }}>Stock / Kardex</Text>
+                  <Text style={{ color, fontSize: 11, fontWeight: '700' }}>Inventario</Text>
                   {focused && <View style={[styles.activeIndicator, { backgroundColor: '#059669' }]} />}
                 </View>
               ),
@@ -93,14 +91,27 @@ export const BottomTabNavigator: React.FC<Props> = ({ onLogout, user }) => {
             }}
           />
 
-          {/* 3. Familias de Repuestos */}
+          <Tab.Screen
+            name="ReportesTab"
+            component={ReportsScreen}
+            options={{
+              tabBarLabel: ({ color, focused }) => (
+                <View style={{ alignItems: 'center' }}>
+                  <Text style={{ color, fontSize: 11, fontWeight: '700' }}>Reportes</Text>
+                  {focused && <View style={[styles.activeIndicator, { backgroundColor: '#059669' }]} />}
+                </View>
+              ),
+              tabBarIcon: ({ color }) => <Ionicons name="bar-chart-outline" size={22} color={color} />,
+            }}
+          />
+
           <Tab.Screen
             name="CategoriasTab"
             component={CategoriesScreen}
             options={{
               tabBarLabel: ({ color, focused }) => (
                 <View style={{ alignItems: 'center' }}>
-                  <Text style={{ color, fontSize: 11, fontWeight: '700' }}>Familias</Text>
+                  <Text style={{ color, fontSize: 11, fontWeight: '700' }}>Catálogo</Text>
                   {focused && <View style={[styles.activeIndicator, { backgroundColor: '#059669' }]} />}
                 </View>
               ),
@@ -108,13 +119,12 @@ export const BottomTabNavigator: React.FC<Props> = ({ onLogout, user }) => {
             }}
           />
 
-          {/* 4. Perfil de Almacenero */}
           <Tab.Screen
             name="PerfilTab"
             options={{
               tabBarLabel: ({ color, focused }) => (
                 <View style={{ alignItems: 'center' }}>
-                  <Text style={{ color, fontSize: 11, fontWeight: '700' }}>Mi Perfil</Text>
+                  <Text style={{ color, fontSize: 11, fontWeight: '700' }}>Perfil</Text>
                   {focused && <View style={[styles.activeIndicator, { backgroundColor: '#059669' }]} />}
                 </View>
               ),
@@ -126,7 +136,6 @@ export const BottomTabNavigator: React.FC<Props> = ({ onLogout, user }) => {
         </>
       ) : (
         <>
-          {/* 1. Inicio / Mostrador */}
           <Tab.Screen
             name="InicioTab"
             options={{
@@ -139,14 +148,13 @@ export const BottomTabNavigator: React.FC<Props> = ({ onLogout, user }) => {
                 </View>
               ),
               tabBarIcon: ({ color }) => (
-                <Ionicons name={esAsesor ? 'storefront-outline' : 'home'} size={22} color={color} />
+                <Ionicons name={esAsesor ? 'storefront-outline' : 'home-outline'} size={22} color={color} />
               ),
             }}
           >
             {(props) => <CatalogScreen {...props} onLogout={onLogout} />}
           </Tab.Screen>
 
-          {/* 2. Categorías / Familias */}
           <Tab.Screen
             name="CategoriasTab"
             component={CategoriesScreen}
@@ -163,7 +171,6 @@ export const BottomTabNavigator: React.FC<Props> = ({ onLogout, user }) => {
             }}
           />
 
-          {/* 3. Favoritos / Frecuentes */}
           <Tab.Screen
             name="FavoritosTab"
             component={SavedFavoritesScreen}
@@ -171,16 +178,17 @@ export const BottomTabNavigator: React.FC<Props> = ({ onLogout, user }) => {
               tabBarLabel: ({ color, focused }) => (
                 <View style={{ alignItems: 'center' }}>
                   <Text style={{ color, fontSize: 11, fontWeight: '700' }}>
-                    {esAsesor ? 'Frecuentes' : 'Favoritos'}
+                    {esAsesor ? 'Rotación' : 'Favoritos'}
                   </Text>
                   {focused && <View style={styles.activeIndicator} />}
                 </View>
               ),
-              tabBarIcon: ({ color }) => <Ionicons name={esAsesor ? 'star-outline' : 'heart-outline'} size={22} color={color} />,
+              tabBarIcon: ({ color }) => (
+                <Ionicons name={esAsesor ? 'star-outline' : 'heart-outline'} size={22} color={color} />
+              ),
             }}
           />
 
-          {/* 4. Pre-orden / Cotizador */}
           <Tab.Screen
             name="PreOrdenTab"
             component={FavoritesScreen}
@@ -206,7 +214,6 @@ export const BottomTabNavigator: React.FC<Props> = ({ onLogout, user }) => {
             }}
           />
 
-          {/* 5. Perfil (Módulo de Usuario con Cierre de Sesión) */}
           <Tab.Screen
             name="PerfilTab"
             options={{

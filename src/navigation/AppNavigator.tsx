@@ -2,9 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { LoginScreen } from '../screens/LoginScreen';
 import { DetailScreen } from '../screens/DetailScreen';
+import { ReportsScreen } from '../screens/ReportsScreen';
 import { BottomTabNavigator } from './BottomTabNavigator';
 import { RootStackParamList } from './types';
 import { StorageService } from '../services/StorageService';
+import { SecurityService } from '../services/SecurityService';
 import { useCart } from '../context/CartContext';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -19,19 +21,34 @@ export const AppNavigator: React.FC = () => {
   }, []);
 
   const checkSession = async () => {
-    const user = await StorageService.getSesion();
-    if (user && user.isAuthenticated) {
-      setSessionUser(user);
-      setIsAuthenticated(true);
-      await refreshCart();
+    try {
+      const user = await StorageService.getSesion();
+      const validation = SecurityService.validateSession(user);
+      if (user && validation.valid) {
+        setSessionUser(user);
+        setIsAuthenticated(true);
+        await refreshCart().catch(() => {});
+      } else if (user) {
+        await StorageService.clearSesion();
+        setSessionUser(null);
+        setIsAuthenticated(false);
+      }
+    } catch (e) {
+      console.warn('Error verificando sesión en AppNavigator:', e);
+      setIsAuthenticated(false);
     }
   };
 
   const handleLoginSuccess = async () => {
-    const user = await StorageService.getSesion();
-    setSessionUser(user);
-    setIsAuthenticated(true);
-    await refreshCart();
+    try {
+      const user = await StorageService.getSesion();
+      setSessionUser(user);
+      setIsAuthenticated(true);
+      await refreshCart().catch(() => {});
+    } catch (e) {
+      console.warn('Error en handleLoginSuccess:', e);
+      setIsAuthenticated(true);
+    }
   };
 
   const handleLogout = async () => {
@@ -61,6 +78,11 @@ export const AppNavigator: React.FC = () => {
           <Stack.Screen
             name="Detail"
             component={DetailScreen}
+            options={{ headerShown: false }}
+          />
+          <Stack.Screen
+            name="Reports"
+            component={ReportsScreen}
             options={{ headerShown: false }}
           />
         </>
