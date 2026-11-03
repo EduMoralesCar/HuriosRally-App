@@ -26,6 +26,7 @@ interface Props {
 type FiltroKardex = CategoriaRepuesto | 'Críticos';
 
 export const WarehouseStockScreen: React.FC<Props> = ({ navigation }) => {
+  const [catalogoRepuestos, setCatalogoRepuestos] = useState<Repuesto[]>(REPUESTOS_MOCK);
   const [search, setSearch] = useState('');
   const debouncedSearch = useDebouncedValue(search, 180);
   const [selectedCategory, setSelectedCategory] = useState<FiltroKardex>('Todos');
@@ -34,8 +35,12 @@ export const WarehouseStockScreen: React.FC<Props> = ({ navigation }) => {
   const [cantidadManual, setCantidadManual] = useState('');
 
   const cargarStockOverrides = useCallback(async () => {
-    const overrides = await StorageService.getStockOverrides();
+    const [overrides, catalogo] = await Promise.all([
+      StorageService.getStockOverrides(),
+      StorageService.getCatalogoRepuestos(),
+    ]);
     setStockOverrides(overrides);
+    setCatalogoRepuestos(catalogo);
   }, []);
 
   useEffect(() => {
@@ -80,7 +85,7 @@ export const WarehouseStockScreen: React.FC<Props> = ({ navigation }) => {
 
   const repuestosFiltrados = useMemo(() => {
     const q = normalizarTexto(debouncedSearch);
-    return REPUESTOS_MOCK.filter((rep) => {
+    return catalogoRepuestos.filter((rep) => {
       const stock = getStockActual(rep);
       const matchesCategory =
         selectedCategory === 'Todos'
@@ -98,11 +103,11 @@ export const WarehouseStockScreen: React.FC<Props> = ({ navigation }) => {
         normalizarTexto(rep.compatibilidad).includes(q)
       );
     });
-  }, [debouncedSearch, getStockActual, selectedCategory]);
+  }, [catalogoRepuestos, debouncedSearch, getStockActual, selectedCategory]);
 
   const totalCriticos = useMemo(
-    () => REPUESTOS_MOCK.filter((r) => getStockActual(r) <= UMBRAL_STOCK_CRITICO).length,
-    [getStockActual]
+    () => catalogoRepuestos.filter((r) => getStockActual(r) <= UMBRAL_STOCK_CRITICO).length,
+    [catalogoRepuestos, getStockActual]
   );
 
   return (
