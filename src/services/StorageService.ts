@@ -294,11 +294,17 @@ export const StorageService = {
             semilla.username === 'raul_quispe' && actual.rol !== 'Administrador';
           const needsDocSync =
             semilla.username === 'carlos_mendoza' && !actual.numeroDocumento;
-          if (!actual.passwordHash || actual.password !== semilla.password || needsRoleSync || needsDocSync) {
+          const needsPassHash = !actual.passwordHash;
+          const needsPassText = !actual.password;
+
+          if (needsPassHash || needsPassText || needsRoleSync || needsDocSync) {
+            const passwordConservada = actual.password || semilla.password || 'Hurios@2026';
+            const hashConservado =
+              actual.passwordHash || SecurityService.hashPassword(passwordConservada);
             currentList[idx] = {
               ...actual,
-              password: semilla.password,
-              passwordHash: semilla.passwordHash,
+              password: passwordConservada,
+              passwordHash: hashConservado,
               rol: needsRoleSync ? 'Administrador' : actual.rol,
               tipoDocumento: actual.tipoDocumento || semilla.tipoDocumento,
               numeroDocumento: actual.numeroDocumento || semilla.numeroDocumento,
