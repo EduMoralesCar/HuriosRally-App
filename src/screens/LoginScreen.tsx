@@ -521,9 +521,11 @@ export const LoginScreen: React.FC<Props> = ({ onLoginSuccess }) => {
                 styles.quickAccountBtn,
                 username === 'carlos_mendoza' && styles.quickAccountBtnActive,
               ]}
-              onPress={() => {
+              onPress={async () => {
                 setUsername('carlos_mendoza');
-                setPassword('Hurios@2026');
+                const users = await StorageService.getUsuarios();
+                const u = users.find((x) => x.username === 'carlos_mendoza');
+                setPassword(u?.password || 'Hurios@2026');
               }}
               activeOpacity={0.8}
             >
@@ -547,9 +549,11 @@ export const LoginScreen: React.FC<Props> = ({ onLoginSuccess }) => {
                 styles.quickAccountBtn,
                 username === 'edu_morales' && styles.quickAccountBtnActive,
               ]}
-              onPress={() => {
+              onPress={async () => {
                 setUsername('edu_morales');
-                setPassword('Hurios@2026');
+                const users = await StorageService.getUsuarios();
+                const u = users.find((x) => x.username === 'edu_morales');
+                setPassword(u?.password || 'Hurios@2026');
               }}
               activeOpacity={0.8}
             >
@@ -573,9 +577,11 @@ export const LoginScreen: React.FC<Props> = ({ onLoginSuccess }) => {
                 styles.quickAccountBtn,
                 username === 'raul_quispe' && styles.quickAccountBtnActive,
               ]}
-              onPress={() => {
+              onPress={async () => {
                 setUsername('raul_quispe');
-                setPassword('Hurios@2026');
+                const users = await StorageService.getUsuarios();
+                const u = users.find((x) => x.username === 'raul_quispe');
+                setPassword(u?.password || 'Hurios@2026');
               }}
               activeOpacity={0.8}
             >
