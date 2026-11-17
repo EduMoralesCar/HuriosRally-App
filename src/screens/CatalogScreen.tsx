@@ -18,6 +18,7 @@ import { CardRepuesto } from '../components/CardRepuesto';
 import { REPUESTOS_MOCK } from '../data/repuestos.mock';
 import { CategoriaRepuesto, Repuesto, PedidoLocal, Usuario } from '../types';
 import { StorageService } from '../services/StorageService';
+import { ExportService } from '../services/ExportService';
 import { useCart } from '../context/CartContext';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { normalizarTexto } from '../utils/catalog';
@@ -710,6 +711,15 @@ export const CatalogScreen: React.FC<Props> = ({ navigation, onLogout }) => {
                         </Text>
                       </Text>
                     </View>
+
+                    <TouchableOpacity
+                      style={styles.orderDownloadPdfBtn}
+                      onPress={() => ExportService.exportarBoletaPdf(ped)}
+                      activeOpacity={0.8}
+                    >
+                      <Ionicons name="document-text-outline" size={14} color="#0066FF" />
+                      <Text style={styles.orderDownloadPdfText}>Descargar Boleta (PDF)</Text>
+                    </TouchableOpacity>
                   </View>
                 ))}
               </ScrollView>
@@ -1222,6 +1232,23 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#0F172A',
     fontWeight: '700',
+  },
+  orderDownloadPdfBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#EFF6FF',
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+    borderRadius: 8,
+    paddingVertical: 7,
+    marginTop: 8,
+    gap: 6,
+  },
+  orderDownloadPdfText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#0066FF',
   },
   asesorModeBanner: {
     flexDirection: 'row',

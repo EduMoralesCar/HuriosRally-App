@@ -36,7 +36,8 @@
           "photosPermission": "Permite a Hurios Rally App acceder a la galería para verificar imágenes de repuestos."
         }
       ],
-      "expo-font"
+      "expo-font",
+      "expo-sharing"
     ]
   }
 }
