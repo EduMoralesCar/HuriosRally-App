@@ -542,6 +542,7 @@ export const StorageService = {
           fechaCreacion: '23/09/2026',
           clienteId: 'usr_cliente_01',
           clienteNombre: 'Carlos Mendoza Silva',
+          clienteTelefono: '+51 987 654 321',
           creadoPorId: 'usr_cliente_01',
           creadoPorNombre: 'Carlos Mendoza Silva',
           subtotal: 470.0,
@@ -551,6 +552,7 @@ export const StorageService = {
           metodoPago: 'Yape / Plin',
           comprobanteTipo: 'Boleta Electrónica',
           documentoNumero: '72819201',
+          numOperacion: 'OP-782910',
           items: [
             {
               repuesto: {
@@ -586,7 +588,9 @@ export const StorageService = {
         {
           id: 'PED-3904',
           fechaCreacion: '23/09/2026',
+          clienteId: 'usr_cliente_corp',
           clienteNombre: 'Transportes & Logística Rally E.I.R.L.',
+          clienteTelefono: '+51 978 451 154',
           creadoPorId: 'usr_asesor_01',
           creadoPorNombre: 'Edu Morales Carlos',
           subtotal: 620.0,
@@ -596,6 +600,7 @@ export const StorageService = {
           metodoPago: 'Contraentrega SMP',
           comprobanteTipo: 'Factura Comercial',
           documentoNumero: '20608542191',
+          numOperacion: 'REF-ALM-01',
           items: [
             {
               repuesto: {
@@ -629,11 +634,115 @@ export const StorageService = {
             },
           ],
         },
+        {
+          id: 'PED-5120',
+          fechaCreacion: '22/09/2026',
+          clienteId: 'usr_cliente_02',
+          clienteNombre: 'Jorge Luis Huamán Ramos',
+          clienteTelefono: '+51 945 123 789',
+          creadoPorId: 'usr_cliente_02',
+          creadoPorNombre: 'Jorge Luis Huamán Ramos',
+          subtotal: 420.0,
+          igv: 75.6,
+          totalCotizado: 495.6,
+          estado: 'Pagado',
+          metodoPago: 'Tarjeta Débito/Crédito',
+          comprobanteTipo: 'Boleta Electrónica',
+          documentoNumero: '45192837',
+          numOperacion: 'OP-991204',
+          items: [
+            {
+              repuesto: {
+                id: 's1',
+                codigoOEM: '48510-80397',
+                nombre: 'Amortiguador Delantero Presurizado a Gas',
+                categoria: 'Suspensión',
+                precio: 420.0,
+                stock: 6,
+                compatibilidad: 'Toyota Hilux 2016+',
+                descripcion: 'Amortiguador de alto rendimiento para trocha y carretera.',
+                imagenUri:
+                  'https://static.wixstatic.com/media/02e9a7_0c2cb6294d1b46da9c1ecf420e6f6ea3~mv2.png/v1/fill/w_909,h_825,al_c,q_90,enc_avif,quality_auto/02e9a7_0c2cb6294d1b46da9c1ecf420e6f6ea3~mv2.png',
+              },
+              cantidad: 1,
+            },
+          ],
+        },
+        {
+          id: 'PED-6215',
+          fechaCreacion: '21/09/2026',
+          clienteId: 'usr_corp_olivos',
+          clienteNombre: 'Mecánica Automotriz Los Olivos S.A.C.',
+          clienteTelefono: '+51 981 223 344',
+          creadoPorId: 'usr_asesor_01',
+          creadoPorNombre: 'Edu Morales Carlos',
+          subtotal: 360.0,
+          igv: 64.8,
+          totalCotizado: 424.8,
+          estado: 'Entregado',
+          metodoPago: 'Yape / Plin',
+          comprobanteTipo: 'Factura Comercial',
+          documentoNumero: '20549182310',
+          numOperacion: 'OP-834190',
+          items: [
+            {
+              repuesto: {
+                id: 'f1',
+                codigoOEM: '04465-0K200',
+                nombre: 'Pastillas de Freno Delanteras',
+                categoria: 'Frenos',
+                precio: 180.0,
+                stock: 15,
+                compatibilidad: 'Toyota Hilux 2016 - 2023',
+                descripcion: 'Pastillas de freno semimetálicas.',
+                imagenUri: 'https://http2.mlstatic.com/D_NQ_NP_939433-MCO72508186952_102023-O.webp',
+              },
+              cantidad: 2,
+            },
+          ],
+        },
       ];
       await this.saveItem(KEYS.HISTORIAL_PEDIDOS, demoPedidos);
       return demoPedidos;
     }
-    return list;
+
+    // Sanitización automática: garantiza que ninguna orden guardada contenga campos undefined o vacíos
+    const sanitizados = list.map((p, idx) => {
+      const idFinal = p.id && p.id !== 'undefined' ? p.id : `PED-${4000 + idx}`;
+      const nombreFinal =
+        p.clienteNombre && p.clienteNombre !== 'undefined' && p.clienteNombre.trim() !== ''
+          ? p.clienteNombre
+          : p.creadoPorNombre || 'Cliente General (Mostrador)';
+      const tipoComp = p.comprobanteTipo || 'Boleta Electrónica';
+      const docFinal =
+        p.documentoNumero && p.documentoNumero !== 'undefined' && p.documentoNumero !== '-'
+          ? p.documentoNumero
+          : tipoComp.includes('Factura')
+          ? '20608542191'
+          : '72080490';
+      const metodoFinal: 'Yape / Plin' | 'Tarjeta Débito/Crédito' | 'Contraentrega SMP' =
+        p.metodoPago || 'Yape / Plin';
+      const opFinal =
+        p.numOperacion && p.numOperacion !== 'undefined' && p.numOperacion !== '-'
+          ? p.numOperacion
+          : metodoFinal === 'Yape / Plin'
+          ? `OP-782${idx}0`
+          : 'REF-CAJA';
+
+      return {
+        ...p,
+        id: idFinal,
+        clienteNombre: nombreFinal,
+        documentoNumero: docFinal,
+        metodoPago: metodoFinal,
+        comprobanteTipo: tipoComp,
+        numOperacion: opFinal,
+        estado: p.estado || 'Pagado',
+        fechaCreacion: p.fechaCreacion || '23/09/2026',
+      };
+    });
+
+    return sanitizados;
   },
 
   async savePedidoEnHistorial(pedido: PedidoLocal): Promise<void> {
