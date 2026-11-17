@@ -102,6 +102,14 @@ function numeroALetras(monto: number): string {
   return `${textoEntero} CON ${centavosStr}/100 SOLES`;
 }
 
+/**
+ * Retorna la ruta base autorizada en el sandbox de Expo para lectura y escritura
+ */
+function getDirectorioAlmacenamiento(): string {
+  const base = FileSystem.documentDirectory || FileSystem.cacheDirectory || '';
+  return base.endsWith('/') ? base : `${base}/`;
+}
+
 export const ExportService = {
   /**
    * Genera el HTML de la Boleta o Factura de Venta Electrónica con el diseño oficial SUNAT
@@ -458,38 +466,47 @@ export const ExportService = {
   },
 
   /**
-   * Genera el PDF de la Boleta y abre el diálogo nativo para previsualizar, imprimir o compartir por WhatsApp/Drive
+   * Genera el comprobante electrónico en PDF y abre el diálogo nativo del sistema operativo
+   * garantizando que el archivo sea accesible por WhatsApp, Google Drive, Edge y visores de PDF.
    */
   async exportarBoletaPdf(pedido: PedidoLocal): Promise<string> {
     const html = this.generarBoletaHtml(pedido);
-    const { uri } = await Print.printToFileAsync({
+    const { uri, base64 } = await Print.printToFileAsync({
       html,
-      base64: false,
+      base64: true,
     });
 
-    const fileName = `Comprobante_${pedido.id}_HuriosRally.pdf`;
-    const newPath = `${FileSystem.documentDirectory || FileSystem.cacheDirectory}${fileName}`;
+    const cleanId = (pedido.id || 'PED').replace(/[^a-zA-Z0-9_-]/g, '_');
+    const fileName = `Comprobante_${cleanId}_HuriosRally.pdf`;
+    const targetPath = `${getDirectorioAlmacenamiento()}${fileName}`;
 
+    let shareUri = targetPath;
     try {
-      await FileSystem.copyAsync({ from: uri, to: newPath });
-    } catch {
-      // Si falla copia usa uri original
+      if (base64) {
+        await FileSystem.writeAsStringAsync(targetPath, base64, {
+          encoding: FileSystem.EncodingType.Base64,
+        });
+      } else {
+        await FileSystem.copyAsync({ from: uri, to: targetPath });
+      }
+    } catch (e) {
+      console.warn('Error al guardar comprobante PDF en sandbox:', e);
+      shareUri = uri;
     }
 
-    const sharePath = newPath || uri;
     if (await Sharing.isAvailableAsync()) {
-      await Sharing.shareAsync(sharePath, {
-        UTI: '.pdf',
+      await Sharing.shareAsync(shareUri, {
+        UTI: 'com.adobe.pdf',
         mimeType: 'application/pdf',
-        dialogTitle: `Compartir ${pedido.comprobanteTipo || 'Boleta'} - ${pedido.id}`,
+        dialogTitle: `${pedido.comprobanteTipo || 'Boleta'} - ${pedido.id}`,
       });
     }
 
-    return sharePath;
+    return shareUri;
   },
 
   /**
-   * Imprime directamente o previsualiza la boleta en la pantalla sin guardar archivo
+   * Imprime directamente o previsualiza en el motor de impresión nativo si se requiere
    */
   async imprimirBoleta(pedido: PedidoLocal): Promise<void> {
     const html = this.generarBoletaHtml(pedido);
@@ -528,21 +545,26 @@ export const ExportService = {
     });
 
     const csvContent = BOM + [encabezados, ...filas].join('\r\n');
-    const path = `${FileSystem.cacheDirectory}Catalogo_HuriosRally_${Date.now()}.csv`;
+    const fileName = `Catalogo_HuriosRally_${Date.now()}.csv`;
+    const targetPath = `${getDirectorioAlmacenamiento()}${fileName}`;
 
-    await FileSystem.writeAsStringAsync(path, csvContent, {
-      encoding: FileSystem.EncodingType.UTF8,
-    });
+    try {
+      await FileSystem.writeAsStringAsync(targetPath, csvContent, {
+        encoding: FileSystem.EncodingType.UTF8,
+      });
+    } catch (e) {
+      console.warn('Error al guardar CSV catálogo:', e);
+    }
 
     if (await Sharing.isAvailableAsync()) {
-      await Sharing.shareAsync(path, {
+      await Sharing.shareAsync(targetPath, {
         mimeType: 'text/csv',
         dialogTitle: 'Exportar Catálogo de Repuestos a Excel',
         UTI: 'public.comma-separated-values-text',
       });
     }
 
-    return path;
+    return targetPath;
   },
 
   /**
@@ -585,27 +607,32 @@ export const ExportService = {
     });
 
     const csvContent = BOM + [encabezados, ...filas].join('\r\n');
-    const path = `${FileSystem.cacheDirectory}Historial_Pedidos_HuriosRally_${Date.now()}.csv`;
+    const fileName = `Historial_Pedidos_HuriosRally_${Date.now()}.csv`;
+    const targetPath = `${getDirectorioAlmacenamiento()}${fileName}`;
 
-    await FileSystem.writeAsStringAsync(path, csvContent, {
-      encoding: FileSystem.EncodingType.UTF8,
-    });
+    try {
+      await FileSystem.writeAsStringAsync(targetPath, csvContent, {
+        encoding: FileSystem.EncodingType.UTF8,
+      });
+    } catch (e) {
+      console.warn('Error al guardar CSV pedidos:', e);
+    }
 
     if (await Sharing.isAvailableAsync()) {
-      await Sharing.shareAsync(path, {
+      await Sharing.shareAsync(targetPath, {
         mimeType: 'text/csv',
         dialogTitle: 'Exportar Registro de Pedidos a Excel',
         UTI: 'public.comma-separated-values-text',
       });
     }
 
-    return path;
+    return targetPath;
   },
 
   /**
-   * Genera y exporta un informe gerencial formal en PDF con las estadísticas y KPIs del Administrador
+   * Genera el HTML del informe gerencial formal con estadísticas y KPIs
    */
-  async exportarReporteEstadisticasPdf(
+  generarReporteEstadisticasHtml(
     stats: {
       totalRecaudado: number;
       totalPedidos: number;
@@ -615,7 +642,7 @@ export const ExportService = {
       topRepuestos: { nombre: string; cant: number; total: number }[];
     },
     pedidos: PedidoLocal[]
-  ): Promise<string> {
+  ): string {
     const fecha = new Date().toLocaleString('es-PE');
     const metodosHtml = Object.entries(stats.desgloseMetodos)
       .map(
@@ -642,7 +669,7 @@ export const ExportService = {
       )
       .join('');
 
-    const html = `
+    return `
       <!DOCTYPE html>
       <html>
       <head>
@@ -734,24 +761,49 @@ export const ExportService = {
       </body>
       </html>
     `;
+  },
 
-    const { uri } = await Print.printToFileAsync({ html, base64: false });
-    const sharePath = `${FileSystem.documentDirectory || FileSystem.cacheDirectory}Reporte_Gerencial_${Date.now()}.pdf`;
+  /**
+   * Genera y exporta el informe gerencial formal en PDF con estadísticas y KPIs
+   */
+  async exportarReporteEstadisticasPdf(
+    stats: {
+      totalRecaudado: number;
+      totalPedidos: number;
+      ticketPromedio: number;
+      unidadesVendidas: number;
+      desgloseMetodos: Record<string, number>;
+      topRepuestos: { nombre: string; cant: number; total: number }[];
+    },
+    pedidos: PedidoLocal[]
+  ): Promise<string> {
+    const html = this.generarReporteEstadisticasHtml(stats, pedidos);
+    const { uri, base64 } = await Print.printToFileAsync({ html, base64: true });
+    const fileName = `Reporte_Gerencial_${Date.now()}.pdf`;
+    const targetPath = `${getDirectorioAlmacenamiento()}${fileName}`;
 
+    let sharePath = targetPath;
     try {
-      await FileSystem.copyAsync({ from: uri, to: sharePath });
-    } catch {
-      // Fallback
+      if (base64) {
+        await FileSystem.writeAsStringAsync(targetPath, base64, {
+          encoding: FileSystem.EncodingType.Base64,
+        });
+      } else {
+        await FileSystem.copyAsync({ from: uri, to: targetPath });
+      }
+    } catch (e) {
+      console.warn('Error al guardar reporte gerencial PDF:', e);
+      sharePath = uri;
     }
 
     if (await Sharing.isAvailableAsync()) {
-      await Sharing.shareAsync(sharePath || uri, {
-        UTI: '.pdf',
+      await Sharing.shareAsync(sharePath, {
+        UTI: 'com.adobe.pdf',
         mimeType: 'application/pdf',
-        dialogTitle: 'Compartir Reporte Ejecutivo en PDF',
+        dialogTitle: 'Reporte Ejecutivo de Ventas - Hurios Rally',
       });
     }
 
-    return sharePath || uri;
+    return sharePath;
   },
 };
