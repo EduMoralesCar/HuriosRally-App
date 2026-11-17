@@ -10,6 +10,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { StorageService } from '../services/StorageService';
+import { ExportService } from '../services/ExportService';
 import { PedidoLocal } from '../types';
 
 interface Props {
@@ -245,31 +246,42 @@ export const WarehouseDispatchScreen: React.FC<Props> = ({ navigation }) => {
                   <Text style={styles.totalVal}>S/ {item.totalCotizado.toFixed(2)}</Text>
                 </View>
 
-                {!esEntregado ? (
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                   <TouchableOpacity
-                    style={styles.btnDespachar}
-                    onPress={() => setPedidoPorDespachar(item)}
-                    activeOpacity={0.85}
+                    style={styles.btnVerPdfDispatch}
+                    onPress={() => ExportService.exportarBoletaPdf(item)}
+                    activeOpacity={0.8}
                   >
-                    <Ionicons
-                      name="checkmark-circle-outline"
-                      size={18}
-                      color="#FFFFFF"
-                      style={{ marginRight: 6 }}
-                    />
-                    <Text style={styles.btnDespacharText}>Marcar Entregado</Text>
+                    <Ionicons name="receipt-outline" size={14} color="#0066FF" style={{ marginRight: 4 }} />
+                    <Text style={styles.btnVerPdfDispatchText}>Boleta PDF</Text>
                   </TouchableOpacity>
-                ) : (
-                  <View style={styles.entregadoTag}>
-                    <Ionicons
-                      name="checkmark-done"
-                      size={16}
-                      color="#16A34A"
-                      style={{ marginRight: 4 }}
-                    />
-                    <Text style={styles.entregadoTagText}>Despachado</Text>
-                  </View>
-                )}
+
+                  {!esEntregado ? (
+                    <TouchableOpacity
+                      style={styles.btnDespachar}
+                      onPress={() => setPedidoPorDespachar(item)}
+                      activeOpacity={0.85}
+                    >
+                      <Ionicons
+                        name="checkmark-circle-outline"
+                        size={17}
+                        color="#FFFFFF"
+                        style={{ marginRight: 5 }}
+                      />
+                      <Text style={styles.btnDespacharText}>Marcar Entregado</Text>
+                    </TouchableOpacity>
+                  ) : (
+                    <View style={styles.entregadoTag}>
+                      <Ionicons
+                        name="checkmark-done"
+                        size={16}
+                        color="#16A34A"
+                        style={{ marginRight: 4 }}
+                      />
+                      <Text style={styles.entregadoTagText}>Despachado</Text>
+                    </View>
+                  )}
+                </View>
               </View>
             </View>
           );
@@ -711,5 +723,20 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
     color: '#FFFFFF',
+  },
+  btnVerPdfDispatch: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#EFF6FF',
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+    paddingHorizontal: 9,
+    paddingVertical: 7,
+    borderRadius: 8,
+  },
+  btnVerPdfDispatchText: {
+    fontSize: 11.5,
+    fontWeight: '700',
+    color: '#0066FF',
   },
 });

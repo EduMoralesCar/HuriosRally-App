@@ -13,7 +13,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useCart } from '../context/CartContext';
 import { StorageService } from '../services/StorageService';
-import { Usuario } from '../types';
+import { Usuario, PedidoLocal } from '../types';
+import { ExportService } from '../services/ExportService';
 import { ProductImage } from '../components/ProductImage';
 import {
   ErroresCheckout,
@@ -67,6 +68,7 @@ export const FavoritesScreen: React.FC<Props> = ({ navigation }) => {
     comprobante: string;
     cliente?: string;
   } | null>(null);
+  const [ultimoPedido, setUltimoPedido] = useState<PedidoLocal | null>(null);
 
   const cargarDatos = useCallback(async () => {
     const [sesion, todos] = await Promise.all([
@@ -150,7 +152,7 @@ export const FavoritesScreen: React.FC<Props> = ({ navigation }) => {
       clienteNombre.trim() ||
       (esAsesor ? 'Cliente de Mostrador' : currentUser?.nombreCompleto || 'Cliente');
 
-    await StorageService.savePedidoEnHistorial({
+    const pedidoFinal: PedidoLocal = {
       id: codPed,
       items: [...items],
       fechaCreacion: new Date().toLocaleDateString('es-PE'),
@@ -167,7 +169,10 @@ export const FavoritesScreen: React.FC<Props> = ({ navigation }) => {
       comprobanteTipo: tipoComprobante,
       documentoNumero: numeroDoc.trim() || undefined,
       numOperacion: metodoPago === 'Yape / Plin' ? numOperacion.trim() : undefined,
-    });
+    };
+
+    await StorageService.savePedidoEnHistorial(pedidoFinal);
+    setUltimoPedido(pedidoFinal);
 
     setCotizacionGenerada({
       id: codPed,
@@ -838,6 +843,21 @@ export const FavoritesScreen: React.FC<Props> = ({ navigation }) => {
                   <Text style={styles.cotVal}>Lima Norte - SMP (Central)</Text>
                 </View>
               </View>
+            )}
+
+            {ultimoPedido && (
+              <TouchableOpacity
+                style={styles.btnDescargarBoletaPdf}
+                onPress={async () => {
+                  await ExportService.exportarBoletaPdf(ultimoPedido);
+                }}
+                activeOpacity={0.85}
+              >
+                <Ionicons name="document-text-outline" size={18} color="#FFFFFF" style={{ marginRight: 6 }} />
+                <Text style={styles.btnDescargarBoletaPdfText}>
+                  Descargar {ultimoPedido.comprobanteTipo || 'Boleta'} (PDF)
+                </Text>
+              </TouchableOpacity>
             )}
 
             <TouchableOpacity
@@ -1514,5 +1534,24 @@ const styles = StyleSheet.create({
     color: '#64748B',
     fontStyle: 'italic',
     textAlign: 'center',
+  },
+  btnDescargarBoletaPdf: {
+    backgroundColor: '#0066FF',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: 46,
+    borderRadius: 12,
+    marginBottom: 10,
+    shadowColor: '#0066FF',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  btnDescargarBoletaPdfText: {
+    color: '#FFFFFF',
+    fontSize: 13.5,
+    fontWeight: '800',
   },
 });

@@ -17,6 +17,7 @@ import { CategoriaRepuesto, PedidoLocal, Repuesto } from '../types';
 import { ProductImage } from '../components/ProductImage';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { normalizarTexto, UMBRAL_STOCK_CRITICO } from '../utils/catalog';
+import { ExportService } from '../services/ExportService';
 
 interface Props {
   navigation: any;
@@ -273,6 +274,70 @@ export const ReportsScreen: React.FC<Props> = ({ navigation }) => {
     mostrarToast(`Orden ${pedidoId} anulada y stock repuesto en Kardex`);
   };
 
+  const handleExportarReportePdf = async () => {
+    try {
+      mostrarToast('Generando reporte gerencial en PDF...');
+      const statsParaExportar = {
+        totalRecaudado: estadisticas.totalVentas,
+        totalPedidos: pedidos.length,
+        ticketPromedio: estadisticas.ticketPromedio,
+        unidadesVendidas: estadisticas.unidadesVendidas,
+        desgloseMetodos: {
+          'Yape / Plin': pedidos
+            .filter((p) => p.metodoPago === 'Yape / Plin')
+            .reduce((sum, p) => sum + (p.totalCotizado || 0), 0),
+          'Tarjeta Débito/Crédito': pedidos
+            .filter((p) => p.metodoPago === 'Tarjeta Débito/Crédito')
+            .reduce((sum, p) => sum + (p.totalCotizado || 0), 0),
+          'Contraentrega SMP': pedidos
+            .filter((p) => p.metodoPago === 'Contraentrega SMP')
+            .reduce((sum, p) => sum + (p.totalCotizado || 0), 0),
+        },
+        topRepuestos: catalogo
+          .slice(0, 5)
+          .map((r) => ({ nombre: r.nombre, cant: r.stock, total: r.precio * r.stock })),
+      };
+      await ExportService.exportarReporteEstadisticasPdf(statsParaExportar, pedidos);
+    } catch (e: any) {
+      mostrarToast(e?.message || 'Error al exportar reporte PDF');
+    }
+  };
+
+  const handleExportarPedidosExcel = async () => {
+    try {
+      if (pedidosFiltrados.length === 0) {
+        mostrarToast('No hay órdenes para exportar con los filtros actuales');
+        return;
+      }
+      mostrarToast(`Exportando ${pedidosFiltrados.length} órdenes a Excel (.CSV)...`);
+      await ExportService.exportarPedidosExcel(pedidosFiltrados);
+    } catch (e: any) {
+      mostrarToast(e?.message || 'Error al exportar órdenes a Excel');
+    }
+  };
+
+  const handleExportarCatalogoExcel = async () => {
+    try {
+      if (catalogo.length === 0) {
+        mostrarToast('No hay repuestos en el catálogo para exportar');
+        return;
+      }
+      mostrarToast(`Exportando ${catalogo.length} repuestos a Excel (.CSV)...`);
+      await ExportService.exportarCatalogoExcel(catalogo);
+    } catch (e: any) {
+      mostrarToast(e?.message || 'Error al exportar catálogo a Excel');
+    }
+  };
+
+  const handleExportarBoletaPdf = async (pedido: PedidoLocal) => {
+    try {
+      mostrarToast(`Generando ${pedido.comprobanteTipo || 'Boleta'} en PDF...`);
+      await ExportService.exportarBoletaPdf(pedido);
+    } catch (e: any) {
+      mostrarToast(e?.message || 'Error al generar comprobante PDF');
+    }
+  };
+
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       {toastMsg && (
@@ -343,6 +408,27 @@ export const ReportsScreen: React.FC<Props> = ({ navigation }) => {
       {/* VISTA 1: ESTADÍSTICAS Y KPIS */}
       {vistaActiva === 'estadisticas' && (
         <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+          {/* Tarjeta de Exportación Ejecutiva en PDF */}
+          <View style={styles.exportBannerCard}>
+            <View style={{ flex: 1, marginRight: 10 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Ionicons name="document-text" size={17} color="#0066FF" />
+                <Text style={styles.exportBannerTitle}>Informe Ejecutivo en PDF</Text>
+              </View>
+              <Text style={styles.exportBannerSub}>
+                Descarga el balance formal con KPIs, recaudación y distribución de pagos.
+              </Text>
+            </View>
+            <TouchableOpacity
+              style={styles.exportBannerBtn}
+              onPress={handleExportarReportePdf}
+              activeOpacity={0.85}
+            >
+              <Ionicons name="download-outline" size={15} color="#FFFFFF" style={{ marginRight: 4 }} />
+              <Text style={styles.exportBannerBtnText}>Exportar PDF</Text>
+            </TouchableOpacity>
+          </View>
+
           <View style={styles.kpiGrid}>
             <View style={styles.kpiCard}>
               <View style={[styles.kpiIconBox, { backgroundColor: '#EFF6FF' }]}>
@@ -505,6 +591,21 @@ export const ReportsScreen: React.FC<Props> = ({ navigation }) => {
             </ScrollView>
           </View>
 
+          {/* Barra de Exportación de Órdenes a Excel */}
+          <View style={styles.ordersExportBar}>
+            <Text style={styles.ordersExportInfo}>
+              {pedidosFiltrados.length} {pedidosFiltrados.length === 1 ? 'orden' : 'órdenes'} encontradas
+            </Text>
+            <TouchableOpacity
+              style={styles.btnExportOrdersExcel}
+              onPress={handleExportarPedidosExcel}
+              activeOpacity={0.85}
+            >
+              <Ionicons name="document-attach-outline" size={15} color="#059669" style={{ marginRight: 5 }} />
+              <Text style={styles.btnExportOrdersExcelText}>Exportar a Excel (.CSV)</Text>
+            </TouchableOpacity>
+          </View>
+
           <FlatList
             data={pedidosFiltrados}
             keyExtractor={(item, idx) => item.id || `ord-${idx}`}
@@ -550,13 +651,24 @@ export const ReportsScreen: React.FC<Props> = ({ navigation }) => {
                     })}
                   </View>
 
-                  <TouchableOpacity
-                    style={styles.deleteOrderBtn}
-                    onPress={() => handleEliminarPedido(item.id)}
-                  >
-                    <Ionicons name="trash-outline" size={15} color="#DC2626" />
-                    <Text style={styles.deleteOrderBtnText}>Anular</Text>
-                  </TouchableOpacity>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <TouchableOpacity
+                      style={styles.btnBoletaPdf}
+                      onPress={() => handleExportarBoletaPdf(item)}
+                      activeOpacity={0.8}
+                    >
+                      <Ionicons name="receipt-outline" size={13} color="#0066FF" style={{ marginRight: 3 }} />
+                      <Text style={styles.btnBoletaPdfText}>Boleta</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={styles.deleteOrderBtn}
+                      onPress={() => handleEliminarPedido(item.id)}
+                    >
+                      <Ionicons name="trash-outline" size={14} color="#DC2626" />
+                      <Text style={styles.deleteOrderBtnText}>Anular</Text>
+                    </TouchableOpacity>
+                  </View>
                 </View>
               </View>
             )}
@@ -575,13 +687,18 @@ export const ReportsScreen: React.FC<Props> = ({ navigation }) => {
         <View style={{ flex: 1 }}>
           <View style={styles.crudTopActions}>
             <TouchableOpacity style={styles.btnCreateRepuesto} onPress={abrirModalCrearRepuesto}>
-              <Ionicons name="add-circle-outline" size={18} color="#FFFFFF" />
-              <Text style={styles.btnCreateRepuestoText}>Registrar Repuesto</Text>
+              <Ionicons name="add-circle-outline" size={17} color="#FFFFFF" />
+              <Text style={styles.btnCreateRepuestoText}>Registrar</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.btnExportCatExcel} onPress={handleExportarCatalogoExcel}>
+              <Ionicons name="document-attach-outline" size={16} color="#059669" />
+              <Text style={styles.btnExportCatExcelText}>Excel Catálogo</Text>
             </TouchableOpacity>
 
             <TouchableOpacity style={styles.btnRestoreCat} onPress={handleRestaurarCatalogo}>
               <Ionicons name="refresh-outline" size={16} color="#0066FF" />
-              <Text style={styles.btnRestoreCatText}>Restaurar Base</Text>
+              <Text style={styles.btnRestoreCatText}>Restaurar</Text>
             </TouchableOpacity>
           </View>
 
@@ -1294,5 +1411,103 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 14,
     fontWeight: '800',
+  },
+  exportBannerCard: {
+    backgroundColor: '#EFF6FF',
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  exportBannerTitle: {
+    fontSize: 13.5,
+    fontWeight: '800',
+    color: '#1E3A8A',
+  },
+  exportBannerSub: {
+    fontSize: 11,
+    color: '#3B82F6',
+    marginTop: 2,
+    lineHeight: 14,
+  },
+  exportBannerBtn: {
+    backgroundColor: '#0066FF',
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    borderRadius: 10,
+    shadowColor: '#0066FF',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3,
+    elevation: 3,
+  },
+  exportBannerBtnText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  ordersExportBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    marginBottom: 4,
+  },
+  ordersExportInfo: {
+    fontSize: 11.5,
+    fontWeight: '600',
+    color: '#64748B',
+  },
+  btnExportOrdersExcel: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#ECFDF5',
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  btnExportOrdersExcelText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#059669',
+  },
+  btnBoletaPdf: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#EFF6FF',
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+    paddingHorizontal: 8,
+    paddingVertical: 4.5,
+    borderRadius: 6,
+  },
+  btnBoletaPdfText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#0066FF',
+  },
+  btnExportCatExcel: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#ECFDF5',
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+    paddingHorizontal: 10,
+    paddingVertical: 9,
+    borderRadius: 10,
+  },
+  btnExportCatExcelText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#059669',
   },
 });
