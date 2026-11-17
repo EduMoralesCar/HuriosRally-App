@@ -309,7 +309,7 @@ export const ReportsScreen: React.FC<Props> = ({ navigation }) => {
         mostrarToast('No hay órdenes para exportar con los filtros actuales');
         return;
       }
-      mostrarToast(`Exportando ${pedidosFiltrados.length} órdenes a Excel (.CSV)...`);
+      mostrarToast(`Exportando ${pedidosFiltrados.length} órdenes a Excel...`);
       await ExportService.exportarPedidosExcel(pedidosFiltrados);
     } catch (e: any) {
       mostrarToast(e?.message || 'Error al exportar órdenes a Excel');
@@ -322,7 +322,7 @@ export const ReportsScreen: React.FC<Props> = ({ navigation }) => {
         mostrarToast('No hay repuestos en el catálogo para exportar');
         return;
       }
-      mostrarToast(`Exportando ${catalogo.length} repuestos a Excel (.CSV)...`);
+      mostrarToast(`Exportando ${catalogo.length} repuestos a Excel...`);
       await ExportService.exportarCatalogoExcel(catalogo);
     } catch (e: any) {
       mostrarToast(e?.message || 'Error al exportar catálogo a Excel');
@@ -602,7 +602,7 @@ export const ReportsScreen: React.FC<Props> = ({ navigation }) => {
               activeOpacity={0.85}
             >
               <Ionicons name="document-attach-outline" size={15} color="#059669" style={{ marginRight: 5 }} />
-              <Text style={styles.btnExportOrdersExcelText}>Exportar a Excel (.CSV)</Text>
+              <Text style={styles.btnExportOrdersExcelText}>Exportar a Excel</Text>
             </TouchableOpacity>
           </View>
 

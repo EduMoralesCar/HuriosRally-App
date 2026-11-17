@@ -180,24 +180,9 @@ export const ExportService = {
             border-collapse: collapse;
           }
           .logo-cell {
-            width: 15%;
+            width: 90px;
             vertical-align: middle;
             text-align: center;
-          }
-          .logo-badge {
-            width: 60px;
-            height: 60px;
-            border-radius: 50%;
-            background: linear-gradient(135deg, #0066FF, #0044BB);
-            border: 3px solid #E11D48;
-            color: #FFFFFF;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: 900;
-            font-size: 16px;
-            line-height: 1;
-            letter-spacing: -0.5px;
           }
           .company-cell {
             width: 50%;
@@ -360,7 +345,48 @@ export const ExportService = {
           <table class="header-table">
             <tr>
               <td class="logo-cell">
-                <div class="logo-badge">HR</div>
+                <svg viewBox="0 0 160 160" width="82" height="82" xmlns="http://www.w3.org/2000/svg" style="display: block; margin: 0 auto;">
+                  <defs>
+                    <linearGradient id="ringGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                      <stop offset="0%" stop-color="#0052CC"/>
+                      <stop offset="100%" stop-color="#0A3981"/>
+                    </linearGradient>
+                    <linearGradient id="silverBg" x1="0%" y1="0%" x2="0%" y2="100%">
+                      <stop offset="0%" stop-color="#FFFFFF"/>
+                      <stop offset="100%" stop-color="#F8FAFC"/>
+                    </linearGradient>
+                  </defs>
+                  <!-- Anillos exteriores oficiales azul y celeste -->
+                  <ellipse cx="80" cy="80" rx="76" ry="76" fill="url(#silverBg)" stroke="url(#ringGrad)" stroke-width="5"/>
+                  <ellipse cx="80" cy="80" rx="69" ry="69" fill="none" stroke="#60A5FA" stroke-width="2"/>
+                  
+                  <!-- Monograma HR -->
+                  <text x="80" y="66" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Arial Black, sans-serif" font-size="42" font-weight="900" fill="#0A3981" text-anchor="middle" letter-spacing="-2">HR</text>
+                  
+                  <!-- Nombre HURIOS -->
+                  <text x="80" y="88" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif" font-size="15" font-weight="900" fill="#0A3981" text-anchor="middle" letter-spacing="1.5">HURIOS</text>
+                  
+                  <!-- Bandera a cuadros y barras de velocidad rally -->
+                  <g transform="translate(42, 94) skewX(-20)">
+                    <rect x="0" y="0" width="8" height="4" fill="#EF4444" rx="0.5"/>
+                    <rect x="11" y="0" width="8" height="4" fill="#0F172A" rx="0.5"/>
+                    <rect x="22" y="0" width="8" height="4" fill="#EF4444" rx="0.5"/>
+                    <rect x="33" y="0" width="8" height="4" fill="#0F172A" rx="0.5"/>
+                    <rect x="44" y="0" width="8" height="4" fill="#EF4444" rx="0.5"/>
+                    <rect x="55" y="0" width="8" height="4" fill="#0F172A" rx="0.5"/>
+                    <rect x="66" y="0" width="8" height="4" fill="#EF4444" rx="0.5"/>
+                    <rect x="4" y="5" width="8" height="4" fill="#0F172A" rx="0.5"/>
+                    <rect x="15" y="5" width="8" height="4" fill="#EF4444" rx="0.5"/>
+                    <rect x="26" y="5" width="8" height="4" fill="#0F172A" rx="0.5"/>
+                    <rect x="37" y="5" width="8" height="4" fill="#EF4444" rx="0.5"/>
+                    <rect x="48" y="5" width="8" height="4" fill="#0F172A" rx="0.5"/>
+                    <rect x="59" y="5" width="8" height="4" fill="#EF4444" rx="0.5"/>
+                    <rect x="70" y="5" width="8" height="4" fill="#0F172A" rx="0.5"/>
+                  </g>
+                  
+                  <!-- RALLY Tipografía deportiva en rojo -->
+                  <text x="80" y="121" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Arial Black, sans-serif" font-style="italic" font-size="19" font-weight="900" fill="#DC2626" text-anchor="middle" letter-spacing="1">RALLY</text>
+                </svg>
               </td>
               <td class="company-cell">
                 <div class="company-name">HURIOS RALLY E.I.R.L.</div>
@@ -514,53 +540,164 @@ export const ExportService = {
   },
 
   /**
-   * Exporta el catálogo completo de repuestos a un archivo Excel (.CSV formateado con UTF-8 BOM)
+   * Exporta el catálogo completo de repuestos a un archivo Excel (.XLS) con tabla estructurada,
+   * encabezados de color corporativo #0A3981, cuadrícula real y dashboard de métricas de inventario.
    */
   async exportarCatalogoExcel(repuestos: Repuesto[]): Promise<string> {
-    const BOM = '\uFEFF';
-    const encabezados = [
-      'Código OEM',
-      'Nombre del Repuesto',
-      'Categoría',
-      'Precio Unitario (S/)',
-      'Stock Actual',
-      'Compatibilidad',
-      'Calificación',
-      'Valorización Total (S/)',
-    ].join(';');
+    const fechaHora = new Date().toLocaleString('es-PE');
+    const totalRepuestos = repuestos.length;
+    const stockTotal = repuestos.reduce((acc, r) => acc + (Number(r.stock) || 0), 0);
+    const valorizacionTotal = repuestos.reduce(
+      (acc, r) => acc + Number(r.precio || 0) * (Number(r.stock) || 0),
+      0
+    );
+    const repuestosStockCritico = repuestos.filter((r) => (Number(r.stock) || 0) <= 5).length;
+    const precioPromedio =
+      totalRepuestos > 0
+        ? repuestos.reduce((acc, r) => acc + Number(r.precio || 0), 0) / totalRepuestos
+        : 0;
 
-    const filas = repuestos.map((r) => {
-      const valorTotal = (Number(r.precio || 0) * Number(r.stock || 0)).toFixed(2);
-      const escape = (txt: string) => `"${(txt || '').replace(/"/g, '""')}"`;
-      return [
-        escape(r.codigoOEM || 'S/N'),
-        escape(r.nombre),
-        escape(r.categoria),
-        Number(r.precio || 0).toFixed(2),
-        r.stock,
-        escape(r.compatibilidad || 'Universal'),
-        r.rating || 5.0,
-        valorTotal,
-      ].join(';');
-    });
+    const filasHtml = repuestos
+      .map((r, i) => {
+        const stockNum = Number(r.stock) || 0;
+        const precioNum = Number(r.precio) || 0;
+        const valorTotal = (precioNum * stockNum).toFixed(2);
+        const esPar = i % 2 === 0;
+        const bgRow = esPar ? '#FFFFFF' : '#F8FAFC';
+        const esCritico = stockNum <= 5;
+        const estadoStockBadge = esCritico
+          ? `<span style="color: #DC2626; font-weight: bold; background-color: #FEE2E2; padding: 2px 6px; border-radius: 4px;">Alerta Crítica</span>`
+          : `<span style="color: #15803D; font-weight: bold; background-color: #DCFCE7; padding: 2px 6px; border-radius: 4px;">Óptimo</span>`;
 
-    const csvContent = BOM + [encabezados, ...filas].join('\r\n');
-    const fileName = `Catalogo_HuriosRally_${Date.now()}.csv`;
+        return `
+        <tr style="background-color: ${bgRow};">
+          <td style="border: 0.5pt solid #CBD5E1; text-align: center; padding: 6px 8px;">${i + 1}</td>
+          <td style="border: 0.5pt solid #CBD5E1; font-family: monospace; font-weight: bold; color: #0052CC; text-align: center; padding: 6px 8px;">${r.codigoOEM || 'S/N'}</td>
+          <td style="border: 0.5pt solid #CBD5E1; font-weight: 600; color: #0F172A; padding: 6px 10px;">${r.nombre}</td>
+          <td style="border: 0.5pt solid #CBD5E1; color: #475569; padding: 6px 8px;">${r.categoria}</td>
+          <td style="border: 0.5pt solid #CBD5E1; text-align: right; padding: 6px 10px; font-weight: 600; mso-number-format: '\\0022S/\\0022\\ #\\,##0\\.00';">S/ ${precioNum.toFixed(2)}</td>
+          <td style="border: 0.5pt solid #CBD5E1; text-align: center; padding: 6px 8px; font-weight: bold; mso-number-format: '#\\,##0';">${stockNum}</td>
+          <td style="border: 0.5pt solid #CBD5E1; text-align: center; padding: 6px 8px;">${estadoStockBadge}</td>
+          <td style="border: 0.5pt solid #CBD5E1; color: #64748B; padding: 6px 8px;">${r.compatibilidad || 'Universal'}</td>
+          <td style="border: 0.5pt solid #CBD5E1; text-align: center; padding: 6px 8px; font-weight: 600;">★ ${(r.rating || 5.0).toFixed(1)}</td>
+          <td style="border: 0.5pt solid #CBD5E1; text-align: right; padding: 6px 10px; font-weight: bold; color: #059669; mso-number-format: '\\0022S/\\0022\\ #\\,##0\\.00';">S/ ${valorTotal}</td>
+        </tr>
+      `;
+      })
+      .join('');
+
+    const excelHtml = `
+      <html xmlns:o="urn:schemas-microsoft-com:office:office"
+            xmlns:x="urn:schemas-microsoft-com:office:excel"
+            xmlns="http://www.w3.org/TR/REC-html40">
+      <head>
+        <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+        <!--[if gte mso 9]>
+        <xml>
+          <x:ExcelWorkbook>
+            <x:ExcelWorksheets>
+              <x:ExcelWorksheet>
+                <x:Name>Catálogo de Repuestos</x:Name>
+                <x:WorksheetOptions>
+                  <x:DisplayGridlines/>
+                </x:WorksheetOptions>
+              </x:ExcelWorksheet>
+            </x:ExcelWorksheets>
+          </x:ExcelWorkbook>
+        </xml>
+        <![endif]-->
+        <style>
+          body { font-family: Calibri, 'Segoe UI', Arial, sans-serif; font-size: 11pt; color: #1E293B; margin: 0; padding: 15px; }
+          .banner-title { font-size: 16pt; font-weight: bold; color: #0A3981; }
+          .banner-sub { font-size: 10pt; color: #64748B; }
+          .kpi-box { border: 1.5pt solid #CBD5E1; background-color: #F8FAFC; text-align: center; padding: 10px 14px; border-radius: 6px; }
+          .kpi-lbl { font-size: 9pt; font-weight: bold; color: #64748B; text-transform: uppercase; }
+          .kpi-val { font-size: 14pt; font-weight: bold; color: #0052CC; }
+          .kpi-green { font-size: 14pt; font-weight: bold; color: #059669; }
+          .kpi-red { font-size: 14pt; font-weight: bold; color: #DC2626; }
+          .th-header { background-color: #0A3981; color: #FFFFFF; font-weight: bold; font-size: 11pt; border: 1pt solid #002D62; text-align: center; height: 32px; }
+          .row-total { background-color: #E2E8F0; font-weight: bold; border-top: 2pt solid #0A3981; border-bottom: 2.5pt double #0A3981; }
+        </style>
+      </head>
+      <body>
+        <table border="0" cellpadding="0" cellspacing="0" style="width: 100%; border-collapse: collapse;">
+          <!-- Banner Corporativo -->
+          <tr>
+            <td colspan="10" class="banner-title" style="padding-bottom: 4px;">HURIOS RALLY E.I.R.L. &bull; RUC: 20608542191</td>
+          </tr>
+          <tr>
+            <td colspan="10" class="banner-sub" style="padding-bottom: 16px;">Catálogo Oficial de Repuestos e Inventario Valorizado &bull; Emitido: ${fechaHora}</td>
+          </tr>
+
+          <!-- Dashboard de KPIs en Excel -->
+          <tr>
+            <td colspan="2" class="kpi-box">
+              <div class="kpi-lbl">TOTAL REPUESTOS</div>
+              <div class="kpi-val">${totalRepuestos} ítems</div>
+            </td>
+            <td colspan="2" class="kpi-box">
+              <div class="kpi-lbl">STOCK FÍSICO TOTAL</div>
+              <div class="kpi-val">${stockTotal} unidades</div>
+            </td>
+            <td colspan="3" class="kpi-box">
+              <div class="kpi-lbl">VALORIZACIÓN TOTAL DEL INVENTARIO</div>
+              <div class="kpi-green">S/ ${valorizacionTotal.toFixed(2)}</div>
+            </td>
+            <td colspan="3" class="kpi-box">
+              <div class="kpi-lbl">STOCK CRÍTICO (&le; 5 UND)</div>
+              <div class="${repuestosStockCritico > 0 ? 'kpi-red' : 'kpi-green'}">${repuestosStockCritico} en alerta</div>
+            </td>
+          </tr>
+          <tr><td colspan="10" style="height: 14px;"></td></tr>
+
+          <!-- Encabezados de Tabla Real con Color Corporativo #0A3981 -->
+          <tr>
+            <th class="th-header" style="width: 45px;">N°</th>
+            <th class="th-header" style="width: 120px;">Código OEM</th>
+            <th class="th-header" style="width: 290px; text-align: left; padding-left: 10px;">Descripción del Repuesto</th>
+            <th class="th-header" style="width: 130px;">Categoría</th>
+            <th class="th-header" style="width: 120px;">Precio Unit. (S/)</th>
+            <th class="th-header" style="width: 90px;">Stock</th>
+            <th class="th-header" style="width: 110px;">Estado Stock</th>
+            <th class="th-header" style="width: 180px;">Compatibilidad</th>
+            <th class="th-header" style="width: 75px;">Rating</th>
+            <th class="th-header" style="width: 140px;">Valor Total (S/)</th>
+          </tr>
+
+          <!-- Filas de Datos -->
+          ${filasHtml}
+
+          <!-- Fila de Totales Generales -->
+          <tr class="row-total">
+            <td colspan="4" style="border: 0.5pt solid #CBD5E1; text-align: right; padding: 8px 12px; font-weight: bold;">TOTALES GENERALES:</td>
+            <td style="border: 0.5pt solid #CBD5E1; text-align: right; padding: 8px 10px; font-weight: bold; mso-number-format: '\\0022S/\\0022\\ #\\,##0\\.00';">S/ ${precioPromedio.toFixed(2)} (Prom.)</td>
+            <td style="border: 0.5pt solid #CBD5E1; text-align: center; padding: 8px 8px; font-weight: bold; mso-number-format: '#\\,##0';">${stockTotal} und.</td>
+            <td style="border: 0.5pt solid #CBD5E1;"></td>
+            <td style="border: 0.5pt solid #CBD5E1;"></td>
+            <td style="border: 0.5pt solid #CBD5E1;"></td>
+            <td style="border: 0.5pt solid #CBD5E1; text-align: right; padding: 8px 10px; font-weight: bold; color: #059669; mso-number-format: '\\0022S/\\0022\\ #\\,##0\\.00';">S/ ${valorizacionTotal.toFixed(2)}</td>
+          </tr>
+        </table>
+      </body>
+      </html>
+    `;
+
+    const fileName = `Catalogo_HuriosRally_${Date.now()}.xls`;
     const targetPath = `${getDirectorioAlmacenamiento()}${fileName}`;
 
     try {
-      await FileSystem.writeAsStringAsync(targetPath, csvContent, {
+      await FileSystem.writeAsStringAsync(targetPath, excelHtml, {
         encoding: FileSystem.EncodingType.UTF8,
       });
     } catch (e) {
-      console.warn('Error al guardar CSV catálogo:', e);
+      console.warn('Error al guardar Excel catálogo:', e);
     }
 
     if (await Sharing.isAvailableAsync()) {
       await Sharing.shareAsync(targetPath, {
-        mimeType: 'text/csv',
+        mimeType: 'application/vnd.ms-excel',
         dialogTitle: 'Exportar Catálogo de Repuestos a Excel',
-        UTI: 'public.comma-separated-values-text',
+        UTI: 'com.microsoft.excel.xls',
       });
     }
 
@@ -568,61 +705,175 @@ export const ExportService = {
   },
 
   /**
-   * Exporta el listado completo de pedidos y órdenes a Excel (.CSV con BOM)
+   * Exporta el listado completo de pedidos y órdenes a un archivo Excel (.XLS) con tabla estructurada,
+   * encabezados de color corporativo #0F172A, cuadrícula real y dashboard con métricas de ventas.
    */
   async exportarPedidosExcel(pedidos: PedidoLocal[]): Promise<string> {
-    const BOM = '\uFEFF';
-    const encabezados = [
-      'N° Pedido',
-      'Fecha',
-      'Cliente',
-      'Comprobante',
-      'N° Documento',
-      'Método de Pago',
-      'N° Operación',
-      'Estado',
-      'Cant. Repuestos',
-      'Subtotal (S/)',
-      'IGV (18%) (S/)',
-      'Total (S/)',
-    ].join(';');
+    const fechaHora = new Date().toLocaleString('es-PE');
+    const totalPedidos = pedidos.length;
+    const totalRecaudado = pedidos.reduce((acc, p) => acc + (p.totalCotizado || 0), 0);
+    const ticketPromedio = totalPedidos > 0 ? totalRecaudado / totalPedidos : 0;
+    const totalItems = pedidos.reduce(
+      (acc, p) => acc + (p.items || []).reduce((sum, item) => sum + (item.cantidad || 1), 0),
+      0
+    );
+    const totalSubtotal = pedidos.reduce((acc, p) => acc + (p.subtotal || 0), 0);
+    const totalIgv = pedidos.reduce((acc, p) => acc + (p.igv || 0), 0);
 
-    const filas = pedidos.map((p) => {
-      const escape = (txt?: string) => `"${(txt || '').replace(/"/g, '""')}"`;
-      const cantItems = (p.items || []).reduce((acc, curr) => acc + (curr.cantidad || 1), 0);
-      return [
-        escape(p.id),
-        escape(p.fechaCreacion),
-        escape(p.clienteNombre),
-        escape(p.comprobanteTipo || 'Boleta'),
-        escape(p.documentoNumero || '-'),
-        escape(p.metodoPago || '-'),
-        escape(p.numOperacion || '-'),
-        escape(p.estado),
-        cantItems,
-        (p.subtotal || 0).toFixed(2),
-        (p.igv || 0).toFixed(2),
-        (p.totalCotizado || 0).toFixed(2),
-      ].join(';');
-    });
+    const filasHtml = pedidos
+      .map((p, i) => {
+        const cantItems = (p.items || []).reduce((acc, curr) => acc + (curr.cantidad || 1), 0);
+        const esPar = i % 2 === 0;
+        const bgRow = esPar ? '#FFFFFF' : '#F8FAFC';
 
-    const csvContent = BOM + [encabezados, ...filas].join('\r\n');
-    const fileName = `Historial_Pedidos_HuriosRally_${Date.now()}.csv`;
+        let colorEstado = '#1D4ED8';
+        let bgEstado = '#DBEAFE';
+        const st = String(p.estado || 'Pendiente');
+        if (st === 'Entregado' || st === 'Pagado') {
+          colorEstado = '#15803D';
+          bgEstado = '#DCFCE7';
+        } else if (st === 'Pendiente') {
+          colorEstado = '#B45309';
+          bgEstado = '#FEF3C7';
+        } else if (st === 'Confirmado') {
+          colorEstado = '#1D4ED8';
+          bgEstado = '#DBEAFE';
+        }
+
+        const estadoBadge = `<span style="color: ${colorEstado}; font-weight: bold; background-color: ${bgEstado}; padding: 2px 6px; border-radius: 4px;">${st}</span>`;
+
+        return `
+        <tr style="background-color: ${bgRow};">
+          <td style="border: 0.5pt solid #CBD5E1; text-align: center; padding: 6px 8px;">${i + 1}</td>
+          <td style="border: 0.5pt solid #CBD5E1; font-family: monospace; font-weight: bold; color: #0052CC; text-align: center; padding: 6px 8px;">${p.id}</td>
+          <td style="border: 0.5pt solid #CBD5E1; text-align: center; padding: 6px 8px; color: #475569;">${p.fechaCreacion}</td>
+          <td style="border: 0.5pt solid #CBD5E1; font-weight: 600; color: #0F172A; padding: 6px 10px;">${p.clienteNombre}</td>
+          <td style="border: 0.5pt solid #CBD5E1; text-align: center; padding: 6px 8px;">${p.comprobanteTipo || 'Boleta'}</td>
+          <td style="border: 0.5pt solid #CBD5E1; text-align: center; padding: 6px 8px; font-family: monospace;">${p.documentoNumero || '-'}</td>
+          <td style="border: 0.5pt solid #CBD5E1; text-align: center; padding: 6px 8px;">${p.metodoPago || '-'}</td>
+          <td style="border: 0.5pt solid #CBD5E1; text-align: center; padding: 6px 8px; font-family: monospace; color: #64748B;">${p.numOperacion || '-'}</td>
+          <td style="border: 0.5pt solid #CBD5E1; text-align: center; padding: 6px 8px;">${estadoBadge}</td>
+          <td style="border: 0.5pt solid #CBD5E1; text-align: center; padding: 6px 8px; font-weight: bold; mso-number-format: '#\\,##0';">${cantItems} und.</td>
+          <td style="border: 0.5pt solid #CBD5E1; text-align: right; padding: 6px 10px; mso-number-format: '\\0022S/\\0022\\ #\\,##0\\.00';">S/ ${(p.subtotal || 0).toFixed(2)}</td>
+          <td style="border: 0.5pt solid #CBD5E1; text-align: right; padding: 6px 10px; color: #64748B; mso-number-format: '\\0022S/\\0022\\ #\\,##0\\.00';">S/ ${(p.igv || 0).toFixed(2)}</td>
+          <td style="border: 0.5pt solid #CBD5E1; text-align: right; padding: 6px 10px; font-weight: bold; color: #059669; mso-number-format: '\\0022S/\\0022\\ #\\,##0\\.00';">S/ ${(p.totalCotizado || 0).toFixed(2)}</td>
+        </tr>
+      `;
+      })
+      .join('');
+
+    const excelHtml = `
+      <html xmlns:o="urn:schemas-microsoft-com:office:office"
+            xmlns:x="urn:schemas-microsoft-com:office:excel"
+            xmlns="http://www.w3.org/TR/REC-html40">
+      <head>
+        <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+        <!--[if gte mso 9]>
+        <xml>
+          <x:ExcelWorkbook>
+            <x:ExcelWorksheets>
+              <x:ExcelWorksheet>
+                <x:Name>Historial de Órdenes</x:Name>
+                <x:WorksheetOptions>
+                  <x:DisplayGridlines/>
+                </x:WorksheetOptions>
+              </x:ExcelWorksheet>
+            </x:ExcelWorksheets>
+          </x:ExcelWorkbook>
+        </xml>
+        <![endif]-->
+        <style>
+          body { font-family: Calibri, 'Segoe UI', Arial, sans-serif; font-size: 11pt; color: #1E293B; margin: 0; padding: 15px; }
+          .banner-title { font-size: 16pt; font-weight: bold; color: #0F172A; }
+          .banner-sub { font-size: 10pt; color: #64748B; }
+          .kpi-box { border: 1.5pt solid #CBD5E1; background-color: #F8FAFC; text-align: center; padding: 10px 14px; border-radius: 6px; }
+          .kpi-lbl { font-size: 9pt; font-weight: bold; color: #64748B; text-transform: uppercase; }
+          .kpi-val { font-size: 14pt; font-weight: bold; color: #0052CC; }
+          .kpi-green { font-size: 14pt; font-weight: bold; color: #059669; }
+          .th-header { background-color: #0F172A; color: #FFFFFF; font-weight: bold; font-size: 11pt; border: 1pt solid #020617; text-align: center; height: 32px; }
+          .row-total { background-color: #E2E8F0; font-weight: bold; border-top: 2pt solid #0F172A; border-bottom: 2.5pt double #0F172A; }
+        </style>
+      </head>
+      <body>
+        <table border="0" cellpadding="0" cellspacing="0" style="width: 100%; border-collapse: collapse;">
+          <!-- Banner Corporativo -->
+          <tr>
+            <td colspan="13" class="banner-title" style="padding-bottom: 4px;">HURIOS RALLY E.I.R.L. &bull; RUC: 20608542191</td>
+          </tr>
+          <tr>
+            <td colspan="13" class="banner-sub" style="padding-bottom: 16px;">Registro Consolidado de Órdenes, Comprobantes y Ventas &bull; Emitido: ${fechaHora}</td>
+          </tr>
+
+          <!-- Dashboard de KPIs en Excel -->
+          <tr>
+            <td colspan="3" class="kpi-box">
+              <div class="kpi-lbl">TOTAL RECAUDADO</div>
+              <div class="kpi-green">S/ ${totalRecaudado.toFixed(2)}</div>
+            </td>
+            <td colspan="3" class="kpi-box">
+              <div class="kpi-lbl">TOTAL DE ÓRDENES</div>
+              <div class="kpi-val">${totalPedidos} transacciones</div>
+            </td>
+            <td colspan="3" class="kpi-box">
+              <div class="kpi-lbl">TICKET PROMEDIO</div>
+              <div class="kpi-val">S/ ${ticketPromedio.toFixed(2)}</div>
+            </td>
+            <td colspan="4" class="kpi-box">
+              <div class="kpi-lbl">PIEZAS VENDIDAS</div>
+              <div class="kpi-green">${totalItems} unidades</div>
+            </td>
+          </tr>
+          <tr><td colspan="13" style="height: 14px;"></td></tr>
+
+          <!-- Encabezados de Tabla Real con Color Corporativo #0F172A -->
+          <tr>
+            <th class="th-header" style="width: 40px;">N°</th>
+            <th class="th-header" style="width: 110px;">N° Pedido</th>
+            <th class="th-header" style="width: 140px;">Fecha y Hora</th>
+            <th class="th-header" style="width: 220px; text-align: left; padding-left: 10px;">Cliente</th>
+            <th class="th-header" style="width: 100px;">Comprobante</th>
+            <th class="th-header" style="width: 110px;">N° Documento</th>
+            <th class="th-header" style="width: 130px;">Método de Pago</th>
+            <th class="th-header" style="width: 120px;">N° Operación</th>
+            <th class="th-header" style="width: 110px;">Estado</th>
+            <th class="th-header" style="width: 85px;">Cant. Rep.</th>
+            <th class="th-header" style="width: 100px;">Subtotal (S/)</th>
+            <th class="th-header" style="width: 95px;">IGV (18%) (S/)</th>
+            <th class="th-header" style="width: 115px;">Total (S/)</th>
+          </tr>
+
+          <!-- Filas de Datos -->
+          ${filasHtml}
+
+          <!-- Fila de Totales -->
+          <tr class="row-total">
+            <td colspan="9" style="border: 0.5pt solid #CBD5E1; text-align: right; padding: 8px 12px; font-weight: bold;">TOTALES GENERALES:</td>
+            <td style="border: 0.5pt solid #CBD5E1; text-align: center; padding: 8px 8px; font-weight: bold; mso-number-format: '#\\,##0';">${totalItems} und.</td>
+            <td style="border: 0.5pt solid #CBD5E1; text-align: right; padding: 8px 10px; font-weight: bold; mso-number-format: '\\0022S/\\0022\\ #\\,##0\\.00';">S/ ${totalSubtotal.toFixed(2)}</td>
+            <td style="border: 0.5pt solid #CBD5E1; text-align: right; padding: 8px 10px; font-weight: bold; color: #64748B; mso-number-format: '\\0022S/\\0022\\ #\\,##0\\.00';">S/ ${totalIgv.toFixed(2)}</td>
+            <td style="border: 0.5pt solid #CBD5E1; text-align: right; padding: 8px 10px; font-weight: bold; color: #059669; mso-number-format: '\\0022S/\\0022\\ #\\,##0\\.00';">S/ ${totalRecaudado.toFixed(2)}</td>
+          </tr>
+        </table>
+      </body>
+      </html>
+    `;
+
+    const fileName = `Historial_Pedidos_HuriosRally_${Date.now()}.xls`;
     const targetPath = `${getDirectorioAlmacenamiento()}${fileName}`;
 
     try {
-      await FileSystem.writeAsStringAsync(targetPath, csvContent, {
+      await FileSystem.writeAsStringAsync(targetPath, excelHtml, {
         encoding: FileSystem.EncodingType.UTF8,
       });
     } catch (e) {
-      console.warn('Error al guardar CSV pedidos:', e);
+      console.warn('Error al guardar Excel pedidos:', e);
     }
 
     if (await Sharing.isAvailableAsync()) {
       await Sharing.shareAsync(targetPath, {
-        mimeType: 'text/csv',
+        mimeType: 'application/vnd.ms-excel',
         dialogTitle: 'Exportar Registro de Pedidos a Excel',
-        UTI: 'public.comma-separated-values-text',
+        UTI: 'com.microsoft.excel.xls',
       });
     }
 
@@ -693,9 +944,44 @@ export const ExportService = {
       </head>
       <body>
         <div class="header">
-          <div>
-            <div class="title">HURIOS RALLY E.I.R.L.</div>
-            <div class="subtitle">Reporte Ejecutivo de Ventas, Órdenes y Rendimiento Comercial</div>
+          <div style="display: flex; align-items: center; gap: 14px;">
+            <svg viewBox="0 0 160 160" width="54" height="54" xmlns="http://www.w3.org/2000/svg">
+              <defs>
+                <linearGradient id="ringGradRep" x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%" stop-color="#0052CC"/>
+                  <stop offset="100%" stop-color="#0A3981"/>
+                </linearGradient>
+                <linearGradient id="silverBgRep" x1="0%" y1="0%" x2="0%" y2="100%">
+                  <stop offset="0%" stop-color="#FFFFFF"/>
+                  <stop offset="100%" stop-color="#F8FAFC"/>
+                </linearGradient>
+              </defs>
+              <ellipse cx="80" cy="80" rx="76" ry="76" fill="url(#silverBgRep)" stroke="url(#ringGradRep)" stroke-width="5"/>
+              <ellipse cx="80" cy="80" rx="69" ry="69" fill="none" stroke="#60A5FA" stroke-width="2"/>
+              <text x="80" y="66" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Arial Black, sans-serif" font-size="42" font-weight="900" fill="#0A3981" text-anchor="middle" letter-spacing="-2">HR</text>
+              <text x="80" y="88" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif" font-size="15" font-weight="900" fill="#0A3981" text-anchor="middle" letter-spacing="1.5">HURIOS</text>
+              <g transform="translate(42, 94) skewX(-20)">
+                <rect x="0" y="0" width="8" height="4" fill="#EF4444" rx="0.5"/>
+                <rect x="11" y="0" width="8" height="4" fill="#0F172A" rx="0.5"/>
+                <rect x="22" y="0" width="8" height="4" fill="#EF4444" rx="0.5"/>
+                <rect x="33" y="0" width="8" height="4" fill="#0F172A" rx="0.5"/>
+                <rect x="44" y="0" width="8" height="4" fill="#EF4444" rx="0.5"/>
+                <rect x="55" y="0" width="8" height="4" fill="#0F172A" rx="0.5"/>
+                <rect x="66" y="0" width="8" height="4" fill="#EF4444" rx="0.5"/>
+                <rect x="4" y="5" width="8" height="4" fill="#0F172A" rx="0.5"/>
+                <rect x="15" y="5" width="8" height="4" fill="#EF4444" rx="0.5"/>
+                <rect x="26" y="5" width="8" height="4" fill="#0F172A" rx="0.5"/>
+                <rect x="37" y="5" width="8" height="4" fill="#EF4444" rx="0.5"/>
+                <rect x="48" y="5" width="8" height="4" fill="#0F172A" rx="0.5"/>
+                <rect x="59" y="5" width="8" height="4" fill="#EF4444" rx="0.5"/>
+                <rect x="70" y="5" width="8" height="4" fill="#0F172A" rx="0.5"/>
+              </g>
+              <text x="80" y="121" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Arial Black, sans-serif" font-style="italic" font-size="19" font-weight="900" fill="#DC2626" text-anchor="middle" letter-spacing="1">RALLY</text>
+            </svg>
+            <div>
+              <div class="title">HURIOS RALLY E.I.R.L.</div>
+              <div class="subtitle">Reporte Ejecutivo de Ventas, Órdenes y Rendimiento Comercial</div>
+            </div>
           </div>
           <div style="text-align: right;">
             <div style="font-weight: 700;">RUC: 20608542191</div>
